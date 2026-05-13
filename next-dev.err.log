@@ -1,0 +1,8 @@
+[browser] Error restoring session i: Failed to connect to MetaMask
+    at Object.connect (chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/inpage.js:1:63525) (file://C:/Users/Luisa Perez/Desktop/full-stack/PATS-Website/.next/dev/static/chunks/node_modules_next_dist_115brz8._.js:2431:13)
+[browser] ⨯ unhandledRejection: i: Failed to connect to MetaMask
+    at Object.connect (chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/inpage.js:1:63525)
+[browser] Error restoring session i: Failed to connect to MetaMask
+    at Object.connect (chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/inpage.js:1:63525) (file://C:/Users/Luisa Perez/Desktop/full-stack/PATS-Website/.next/dev/static/chunks/node_modules_next_dist_115brz8._.js:2431:13)
+[browser] ⨯ unhandledRejection: i: Failed to connect to MetaMask
+    at Object.connect (chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/inpage.js:1:63525)
