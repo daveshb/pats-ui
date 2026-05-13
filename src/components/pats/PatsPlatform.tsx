@@ -175,9 +175,9 @@ const externalTrades = [
 ];
 
 const fillDeliveries = [
-  { tradeId: "TRD-001", fillId: "FILL-001", destination: "Vantage Blotter", recipient: "trade-blotter", method: "REST API", status: "Fill Returned", last: "2 min ago", next: "-" },
-  { tradeId: "TRD-003", fillId: "FILL-003", destination: "Vantage Blotter", recipient: "trade-blotter", method: "REST API", status: "Retrying", last: "4 min ago", next: "1 min" },
-  { tradeId: "TRD-004", fillId: "FILL-004", destination: "Vantage Blotter", recipient: "trade-blotter", method: "REST API", status: "Failed", last: "9 min ago", next: "Manual" },
+  { tradeId: "it_4eb00593", fillId: "not_created_yet", destination: "Vantage", recipient: "future fill return", method: "not implemented", status: "validated", last: "2 min ago", next: "execution module" },
+  { tradeId: "it_d672e1c1", fillId: "not_created_yet", destination: "TradeWorkflow", recipient: "ops checklist", method: "workflow steps", status: "workflow_required", last: "4 min ago", next: "complete required steps" },
+  { tradeId: "it_a418e890", fillId: "not_created_yet", destination: "Ops review", recipient: "resolution queue", method: "manual review", status: "unresolved", last: "9 min ago", next: "create ticker mapping" },
 ];
 
 const executionFlows = [
@@ -189,7 +189,7 @@ const executionFlows = [
     ticker: "TECH-A",
     broker: "Goldman Sachs Advisor Solutions",
     asset: "TechCorp Series A",
-    fillId: "FILL-001",
+    fillId: "not_created_yet",
     status: "in_progress",
     currentStep: 2,
     blockedStep: null,
@@ -231,22 +231,22 @@ const executionFlows = [
 const executionSteps = ["Inbound trade", "Ticker resolved", "Workflow required", "Required steps", "Eligibility update", "Validated", "Ready for execution"];
 
 const activityEvents = [
-  "Trade received from Vantage Blotter",
-  "Ticker TECH-A resolved under Goldman Sachs Advisor Solutions",
-  "Validation passed for VNT-88301",
-  "Private asset broker selected for TECH-A",
-  "Document sent via DocuSign",
-  "Trade routed to Goldman Sachs Advisor Solutions private asset desk",
-  "Fill received for TRD-001",
-  "Fill returned to Vantage Blotter",
-  "Manual override added by Sarah Chen",
+  "InboundTrade received from Vantage API",
+  "Ticker TECH-A resolved with vantageBrokerId + ticker",
+  "BrokerScopedTicker matched bst_tech_a_gsas",
+  "PrivateAsset pa_tech_a selected",
+  "WorkflowTemplate wt_tech_subscription loaded",
+  "Eligibility check returned already_eligible",
+  "InboundTrade status changed to validated",
+  "TradeWorkflow created for user without eligibility",
+  "Required workflow step completed by Ops",
 ];
 
 const alerts = [
-  { severity: "High", entity: "SSNC-7712", issue: "Trade validation failed", status: "Open", owner: "Operations", created: "21 min ago" },
-  { severity: "Critical", entity: "FILL-004", issue: "Fill delivery failed", status: "In Review", owner: "Sarah Chen", created: "9 min ago" },
-  { severity: "Medium", entity: "HEALTH-B", issue: "Missing signed redemption notice", status: "Open", owner: "Docs Team", created: "1 hour ago" },
-  { severity: "Low", entity: "Credit Suisse", issue: "External system disconnected", status: "Open", owner: "Integrations", created: "3 hours ago" },
+  { severity: "High", entity: "it_a418e890", issue: "Ticker could not be resolved", status: "Open", owner: "Operations", created: "21 min ago" },
+  { severity: "Critical", entity: "tws_notice_001", issue: "Required workflow step is blocked", status: "In Review", owner: "Sarah Chen", created: "9 min ago" },
+  { severity: "Medium", entity: "pa_energy_c", issue: "Private asset is restricted and needs review", status: "Open", owner: "Docs Team", created: "1 hour ago" },
+  { severity: "Low", entity: "pbp_legacy", issue: "Broker profile is disconnected", status: "Open", owner: "Integrations", created: "3 hours ago" },
 ];
 
 const tradeGridClass = "grid-cols-[0.9fr_0.8fr_1fr_0.75fr_0.8fr_0.9fr_0.9fr_0.75fr]";
@@ -920,8 +920,8 @@ function Workflows() {
 function Documents() {
   return (
     <>
-      <PageTitle title="Documents" subtitle="Document and signature requirements generated from broker workflow templates" />
-      <Toolbar placeholder="Search documents, asset, broker, or platform..." />
+      <PageTitle title="Documents" subtitle="Mocked document records derived from workflow requirements; the real Documents module is the next backend step" />
+      <Toolbar placeholder="Search documentId, workflowRequirementId, tradeWorkflowStepId, asset, broker, or platform..." />
       <div className="grid grid-cols-[1.05fr_0.95fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
@@ -930,7 +930,7 @@ function Documents() {
           </div>
           <div className="grid grid-cols-[1.15fr_0.65fr_0.85fr_0.85fr_0.75fr_0.75fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
             <span>Document</span>
-            <span>Trade</span>
+            <span>Step ID</span>
             <span>Platform</span>
             <span>Envelope</span>
             <span>Status</span>
@@ -942,7 +942,7 @@ function Documents() {
                 <span className="block font-semibold text-slate-100">{doc.name}</span>
                 <span className="mt-1 block text-[11px] text-slate-500">{doc.asset} · {doc.broker}</span>
               </span>
-              <span className="text-xs text-sky-300">{doc.tradeId}</span>
+              <span className="text-xs text-sky-300">{doc.tradeWorkflowStepId}</span>
               <span className="text-xs text-slate-300">{doc.platform}</span>
               <span className="text-xs text-slate-500">{doc.envelope}</span>
               <span><StatusBadge value={doc.status} /></span>
@@ -951,14 +951,14 @@ function Documents() {
           ))}
         </ShellCard>
         <ShellCard className="p-5">
-          <h2 className="text-base font-semibold text-white">Signing options</h2>
-          <p className="mt-1 text-xs text-slate-500">PATS can launch DocuSign directly or receive a signed-status callback from the broker platform.</p>
+          <h2 className="text-base font-semibold text-white">Document module target flow</h2>
+          <p className="mt-1 text-xs text-slate-500">The UI is showing the intended lifecycle, but today these records are still mocked until the Documents backend exists.</p>
           <div className="mt-5 space-y-3">
             {[
-              ["1", "Create request", "PATS creates or stores a DocuSign/iCapital envelope for the workflow requirement.", "Completed"],
-              ["2", "Open signing path", "Investor can sign through PATS/DocuSign or through the broker platform.", "Sent"],
-              ["3", "Receive callback", "Platform calls PATS when the envelope is viewed, signed, completed, or failed.", "Waiting"],
-              ["4", "Unlock eligibility", "Completed documents release approval for this private asset.", "Pending"],
+              ["1", "Workflow step requires document", "TradeWorkflowStep points back to a WorkflowRequirement of type document or signature.", "completed"],
+              ["2", "Ops uploads or creates envelope", "Initial approach is manual upload by Ops; DocuSign/iCapital can be added behind this module.", "sent"],
+              ["3", "Document status changes", "pending, sent, signed, completed, or blocked is stored on the future document entity.", "waiting"],
+              ["4", "Step can complete", "When the document satisfies the requirement, the related TradeWorkflowStep can be completed.", "pending"],
             ].map(([number, title, description, status]) => (
               <div key={title} className="grid grid-cols-[24px_1fr_auto] gap-3 rounded-md border border-slate-800 bg-slate-950/35 p-3">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full border border-sky-400/25 bg-sky-400/10 text-[10px] font-semibold text-sky-300">{number}</span>
@@ -971,8 +971,8 @@ function Documents() {
             ))}
           </div>
           <div className="mt-5 grid grid-cols-2 gap-2">
-            <Info label="Current blocker" value="Waiting for signature callback" />
-            <Info label="Tracked by" value="Envelope ID and webhook event" />
+            <Info label="Backend status" value="Planned module" />
+            <Info label="First source" value="Manual Ops upload" />
           </div>
         </ShellCard>
       </div>
@@ -1036,6 +1036,15 @@ function Execution() {
             </div>
 
             <div className="mt-4 grid grid-cols-[1fr_1fr] gap-3">
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
+                Source: inbound trade -&gt; ticker resolution -&gt; workflow decision
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
+                Result: required steps completed -&gt; inbound trade validated -&gt; eligibility can be created
+              </div>
+            </div>
+
+            <div className="mt-4 hidden grid-cols-[1fr_1fr] gap-3">
               <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
                 Source: Vantage Blotter → PATS → {flow.broker}
               </div>
@@ -1194,23 +1203,29 @@ function TradeDetails({ trade, onClose }: { trade: Trade; onClose: () => void })
     <DetailPanel title="Trade Details" subtitle={`${trade.ticker} · ${trade.broker}`} onClose={onClose}>
       <ShellCard className="mb-5 p-6"><p className="text-sm text-slate-500">Current Status</p><div className="mt-5"><StatusBadge value={trade.status} /></div></ShellCard>
       <ShellCard className="mb-5 p-6">
-        <h3 className="mb-5 text-lg font-semibold text-white">Trade Information</h3>
+        <h3 className="mb-5 text-lg font-semibold text-white">InboundTrade fields</h3>
         <div className="grid grid-cols-2 gap-5">
-          <Info label="Trade ID" value={trade.id} />
-          <Info label="Type" value={trade.type} />
+          <Info label="inboundTradeId" value={trade.inboundTradeId} />
+          <Info label="vantageTradeId" value={trade.vantageTradeId} />
+          <Info label="vantageBrokerId" value={trade.vantageBrokerId} />
+          <Info label="patsBrokerProfileId" value={trade.patsBrokerProfileId ?? "-"} />
+          <Info label="privateAssetId" value={trade.privateAssetId ?? "-"} />
+          <Info label="brokerScopedTickerId" value={trade.brokerScopedTickerId ?? "-"} />
+          <Info label="userId" value={trade.userId ?? "-"} />
+          <Info label="accountId" value={trade.accountId ?? "-"} />
           <Info label="Quantity" value={trade.quantity} />
           <Info label="Amount" value={trade.amount} />
-          <Info label="Routing" value={trade.routing} />
-          <Info label="Time" value={trade.time} />
+          <Info label="workflowRequired" value={trade.workflowRequired ? "true" : "false"} />
+          <Info label="reason" value={trade.workflowReason} />
         </div>
       </ShellCard>
       <ShellCard className="mb-5 p-6">
-        <h3 className="text-lg font-semibold text-white">Lifecycle</h3>
-        <Timeline items={["Received from Vantage", "Broker route selected", "Workflow checked", "Broker approved", "Fill received", "Fill returned to Vantage"]} current={4} />
+        <h3 className="text-lg font-semibold text-white">Backend decision path</h3>
+        <Timeline items={["Inbound trade received", "Ticker normalized", "Broker + ticker resolved", "Workflow template checked", "Eligibility checked", "Final trade status assigned"]} current={trade.status === "validated" ? 6 : trade.status === "workflow_required" ? 4 : 2} />
       </ShellCard>
       <ShellCard className="p-6">
-        <h3 className="text-lg font-semibold text-white">Execution Details</h3>
-        <Timeline items={[`Routed through ${trade.routing}`, "Broker confirmation received", "Fill normalized for Vantage"]} current={2} />
+        <h3 className="text-lg font-semibold text-white">Next backend action</h3>
+        <Timeline items={trade.workflowRequired ? ["Create TradeWorkflow", "Complete required steps", "Mark inbound trade validated", "Create eligibility if once_per_user"] : ["No workflow needed", "Inbound trade is validated", "Ready for future execution module"]} current={1} />
       </ShellCard>
     </DetailPanel>
   );
@@ -1222,12 +1237,12 @@ function BrokerDetails({ broker, onClose }: { broker: Broker; onClose: () => voi
       <ShellCard className="mb-5 p-6">
         <h3 className="text-lg font-semibold text-white">Overview</h3>
         <div className="mt-5 grid grid-cols-2 gap-5">
-          <Info label="Short Code" value={broker.code} />
-          <Info label="Private Route" value={broker.defaultRoute} />
+          <Info label="patsBrokerProfileId" value={broker.patsBrokerProfileId} />
+          <Info label="vantageBrokerId" value={broker.vantageBrokerId} />
           <Info label="Inbound Trades" value={broker.inboundTrades.toString()} />
           <Info label="Listed Assets" value={broker.listedAssets.toString()} />
           <Info label="Workflow Owner" value={broker.workflowOwner} />
-          <Info label="Fill Return" value={broker.fillReturn} />
+          <Info label="fillReturnMethod" value={broker.fillReturnMethod} />
         </div>
       </ShellCard>
       <ShellCard className="mb-5 p-6">
@@ -1265,14 +1280,14 @@ function AssetDetails({ asset, onClose }: { asset: Asset; onClose: () => void })
       <ShellCard className="mb-5 p-6">
         <h3 className="text-lg font-semibold text-white">Terms</h3>
         <div className="mt-5 grid grid-cols-2 gap-5">
-          <Info label="Asset Class" value={asset.className} />
-          <Info label="Fund Structure" value={asset.structure} />
-          <Info label="Sponsor" value={asset.sponsor} />
-          <Info label="Liquidity" value={asset.liquidity} />
-          <Info label="Lock-up" value={asset.lockup} />
-          <Info label="Notice" value={asset.notice} />
-          <Info label="Supply Limit" value={asset.supply} />
-          <Info label="Units Available" value={asset.units} />
+          <Info label="privateAssetId" value={asset.privateAssetId} />
+          <Info label="patsBrokerProfileId" value={asset.patsBrokerProfileId} />
+          <Info label="assetClass" value={asset.assetClass} />
+          <Info label="preceptAssetClass" value={asset.preceptAssetClass} />
+          <Info label="fundStructure" value={asset.fundStructure} />
+          <Info label="gpSponsor" value={asset.gpSponsor} />
+          <Info label="taxDocumentSource" value={asset.taxDocumentSource} />
+          <Info label="documentPlatform" value={asset.documentExecutionPlatform} />
         </div>
       </ShellCard>
       <ShellCard className="p-6">
@@ -1287,9 +1302,9 @@ function ExternalTradeDetails({ id, onClose }: { id: string; onClose: () => void
   const item = externalTrades.find((trade) => trade.externalId === id) ?? externalTrades[0];
   return (
     <DetailPanel title="Inbound Blotter Trade" subtitle={item.externalId} onClose={onClose}>
-      <ShellCard className="mb-5 p-5"><h3 className="text-sm font-semibold text-white">Raw Vantage payload</h3><pre className="mt-4 overflow-auto rounded-md bg-black/30 p-4 text-xs text-slate-300">{JSON.stringify({ source: item.source, broker: item.broker, ticker: item.ticker, qty: 10000, returnTo: "Vantage Blotter" }, null, 2)}</pre></ShellCard>
-      <ShellCard className="mb-5 p-5"><h3 className="text-sm font-semibold text-white">Normalized PATS trade</h3><div className="mt-5 grid grid-cols-2 gap-5"><Info label="Private Broker" value={item.broker} /><Info label="Broker Ticker" value={item.ticker} /><Info label="Private Asset" value={item.asset} /><Info label="PATS Status" value={item.execution} /></div></ShellCard>
-      <ShellCard className="p-5"><h3 className="text-sm font-semibold text-white">Validation and return path</h3><Timeline items={["Received from Vantage", "Broker ticker resolved", "Validation passed", "Workflow started", "Fill return pending"]} current={2} /></ShellCard>
+      <ShellCard className="mb-5 p-5"><h3 className="text-sm font-semibold text-white">Raw Vantage payload</h3><pre className="mt-4 overflow-auto rounded-md bg-black/30 p-4 text-xs text-slate-300">{JSON.stringify({ vantageTradeId: item.externalId, vantageBrokerId: item.vantageBrokerId, ticker: item.ticker, side: "buy", quantity: 10000, userId: "user-123", accountId: "acct-123" }, null, 2)}</pre></ShellCard>
+      <ShellCard className="mb-5 p-5"><h3 className="text-sm font-semibold text-white">Normalized PATS response</h3><div className="mt-5 grid grid-cols-2 gap-5"><Info label="inboundTradeId" value={item.inboundTradeId} /><Info label="patsBrokerProfileId" value={item.patsBrokerProfileId} /><Info label="brokerScopedTickerId" value={item.brokerScopedTickerId} /><Info label="privateAssetId" value={item.privateAssetId} /><Info label="status" value={item.validation} /><Info label="reason" value={item.execution} /></div></ShellCard>
+      <ShellCard className="p-5"><h3 className="text-sm font-semibold text-white">Backend resolution path</h3><Timeline items={["Received from Vantage", "Resolved broker + ticker", "Loaded private asset", "Checked workflow template", "Checked eligibility", "Assigned inbound trade status"]} current={item.validation === "validated" ? 6 : item.validation === "workflow_required" ? 4 : 2} /></ShellCard>
     </DetailPanel>
   );
 }
