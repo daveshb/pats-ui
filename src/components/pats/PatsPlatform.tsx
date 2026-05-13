@@ -51,19 +51,32 @@ type StatusTone = "green" | "yellow" | "red" | "blue" | "gray" | "purple";
 
 interface Trade {
   id: string;
+  inboundTradeId: string;
+  vantageTradeId: string;
+  vantageBrokerId: string;
+  patsBrokerProfileId?: string;
+  privateAssetId?: string;
+  brokerScopedTickerId?: string;
+  workflowTemplateId?: string;
+  userId?: string;
+  accountId?: string;
   ticker: string;
   broker: string;
   asset: string;
   type: "Buy" | "Sell" | "Subscribe" | "Redeem";
   quantity: string;
   amount: string;
-  status: "Filled" | "Pending" | "Partial" | "Rejected";
+  status: "validated" | "workflow_required" | "unresolved" | "needs_review";
+  workflowRequired: boolean;
+  workflowReason: "no_template" | "every_trade" | "already_eligible" | "no_eligibility" | "unresolved" | "needs_review";
   routing: "FIX" | "SS&C" | "API" | "Manual";
   time: string;
   fillId: string;
 }
 
 interface Broker {
+  patsBrokerProfileId: string;
+  vantageBrokerId: string;
   name: string;
   code: string;
   status: "Active" | "Disconnected";
@@ -71,16 +84,32 @@ interface Broker {
   inboundTrades: number;
   listedAssets: number;
   defaultRoute: string;
+  defaultVantageRouterId: string | null;
   role: string;
   workflowOwner: string;
+  fillReturnMethod: "vantage_blotter" | "manual" | "api_confirmation" | "workflow_event";
   fillReturn: string;
   contacts: string[];
 }
 
 interface Asset {
+  privateAssetId: string;
+  patsBrokerProfileId: string;
+  brokerScopedTickerId: string;
   ticker: string;
   name: string;
   broker: string;
+  assetClass: "private_equity" | "private_credit" | "venture_capital" | "hedge_fund" | "real_assets" | "other";
+  preceptAssetClass: string;
+  preceptStyle: string;
+  fundStructure: string;
+  gpSponsor: string;
+  liquidityTerms: string;
+  lockupPeriod: string;
+  noticePeriod: string;
+  taxDocumentSource: string;
+  documentExecutionPlatform: string;
+  status: "active" | "inactive" | "restricted";
   className: string;
   structure: string;
   sponsor: string;
@@ -93,41 +122,41 @@ interface Asset {
 }
 
 const trades: Trade[] = [
-  { id: "TRD-001", ticker: "TECH-A", broker: "Goldman Sachs Advisor Solutions", asset: "TechCorp Series A", type: "Buy", quantity: "10,000", amount: "$452,000", status: "Filled", routing: "API", time: "10:24 AM", fillId: "FILL-001" },
-  { id: "TRD-002", ticker: "HEALTH-B", broker: "Morgan Stanley Alternatives", asset: "HealthTech Preferred", type: "Sell", quantity: "5,000", amount: "$642,500", status: "Pending", routing: "Manual", time: "10:18 AM", fillId: "FILL-002" },
-  { id: "TRD-003", ticker: "ENERGY-C", broker: "JP Morgan Private Markets", asset: "CleanEnergy Fund", type: "Buy", quantity: "15,000", amount: "$1,380,000", status: "Partial", routing: "API", time: "10:12 AM", fillId: "FILL-003" },
-  { id: "TRD-004", ticker: "FINTECH-D", broker: "iCapital Marketplace", asset: "FinTech Growth", type: "Sell", quantity: "7,500", amount: "$1,580,625", status: "Filled", routing: "API", time: "10:05 AM", fillId: "FILL-004" },
-  { id: "TRD-005", ticker: "BIOTECH-E", broker: "Goldman Sachs Advisor Solutions", asset: "BioTech Opportunity", type: "Subscribe", quantity: "20,000", amount: "$2,000,000", status: "Pending", routing: "API", time: "9:58 AM", fillId: "FILL-005" },
-  { id: "TRD-006", ticker: "RETAIL-F", broker: "Schwab Alternative Investments", asset: "Retail Income Fund", type: "Redeem", quantity: "12,500", amount: "$875,000", status: "Filled", routing: "Manual", time: "9:45 AM", fillId: "FILL-006" },
+  { id: "TRD-001", inboundTradeId: "it_4eb00593", vantageTradeId: "vt_eligible_001", vantageBrokerId: "176f7a13d62244845b746b04c79fa621", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", brokerScopedTickerId: "bst_tech_a_gsas", workflowTemplateId: "wt_tech_subscription", userId: "user-123", accountId: "acct-123", ticker: "TECH-A", broker: "Goldman Sachs Advisor Solutions", asset: "TechCorp Series A", type: "Buy", quantity: "10,000", amount: "$452,000", status: "validated", workflowRequired: false, workflowReason: "already_eligible", routing: "API", time: "10:24 AM", fillId: "pending" },
+  { id: "TRD-002", inboundTradeId: "it_d672e1c1", vantageTradeId: "vt_no_eligibility_001", vantageBrokerId: "176f7a13d62244845b746b04c79fa621", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", brokerScopedTickerId: "bst_tech_a_gsas", workflowTemplateId: "wt_tech_subscription", userId: "user-456", accountId: "acct-456", ticker: "TECH-A", broker: "Goldman Sachs Advisor Solutions", asset: "TechCorp Series A", type: "Subscribe", quantity: "10,000", amount: "$452,000", status: "workflow_required", workflowRequired: true, workflowReason: "no_eligibility", routing: "Manual", time: "10:18 AM", fillId: "pending" },
+  { id: "TRD-003", inboundTradeId: "it_cb41f317", vantageTradeId: "vt_every_trade_001", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", brokerScopedTickerId: "bst_health_b_ms", workflowTemplateId: "wt_health_redemption", userId: "user-123", accountId: "acct-123", ticker: "HEALTH-B", broker: "Morgan Stanley Alternatives", asset: "HealthTech Preferred", type: "Redeem", quantity: "5,000", amount: "$642,500", status: "workflow_required", workflowRequired: true, workflowReason: "every_trade", routing: "Manual", time: "10:12 AM", fillId: "pending" },
+  { id: "TRD-004", inboundTradeId: "it_a418e890", vantageTradeId: "vt_unresolved_001", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", ticker: "DOES-NOT-EXIST", broker: "Morgan Stanley Alternatives", asset: "Not resolved", type: "Buy", quantity: "10,000", amount: "-", status: "unresolved", workflowRequired: false, workflowReason: "unresolved", routing: "Manual", time: "10:05 AM", fillId: "pending" },
+  { id: "TRD-005", inboundTradeId: "it_a71e6d82", vantageTradeId: "vt_needs_review_001", vantageBrokerId: "cb2a2ee8e52d0c54e3af17fc32bb84c9", patsBrokerProfileId: "pbp_jpm", privateAssetId: "pa_energy_c", brokerScopedTickerId: "bst_energy_c_jpm", ticker: "ENERGY-C", broker: "JP Morgan Private Markets", asset: "CleanEnergy Fund", type: "Buy", quantity: "-", amount: "$1,380,000", status: "needs_review", workflowRequired: false, workflowReason: "needs_review", routing: "API", time: "9:58 AM", fillId: "pending" },
+  { id: "TRD-006", inboundTradeId: "it_7bd6a44f", vantageTradeId: "vt_no_template_001", vantageBrokerId: "8a4c01a23b574ab5a8c11225efcd2299", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", brokerScopedTickerId: "bst_fintech_d_icap", ticker: "FINTECH-D", broker: "iCapital Marketplace", asset: "FinTech Growth", type: "Buy", quantity: "7,500", amount: "$1,580,625", status: "validated", workflowRequired: false, workflowReason: "no_template", routing: "API", time: "9:45 AM", fillId: "pending" },
 ];
 
 const brokers: Broker[] = [
-  { name: "Goldman Sachs Advisor Solutions", code: "GSAS", status: "Active", systems: ["Private Broker API", "DocuSign"], inboundTrades: 24, listedAssets: 18, defaultRoute: "Private Asset Desk", role: "Lists assets and confirms private fills", workflowOwner: "Broker + PATS Ops", fillReturn: "PATS returns fill to Vantage", contacts: ["Maya Singh", "gsas-private-assets@example.com"] },
-  { name: "Morgan Stanley Alternatives", code: "MSALT", status: "Active", systems: ["iCapital", "Manual Review"], inboundTrades: 11, listedAssets: 12, defaultRoute: "Alternatives Desk", role: "Manages subscriptions and redemptions", workflowOwner: "Broker workflow", fillReturn: "Manual confirmation to PATS", contacts: ["Carlos Reed", "ms-alt-ops@example.com"] },
-  { name: "JP Morgan Private Markets", code: "JPM-PM", status: "Active", systems: ["Private Broker API"], inboundTrades: 8, listedAssets: 15, defaultRoute: "Private Markets API", role: "Routes approved private asset orders", workflowOwner: "PATS Ops approval", fillReturn: "API confirmation", contacts: ["Nina Walsh", "jpm-private@example.com"] },
-  { name: "iCapital Marketplace", code: "ICAP", status: "Active", systems: ["iCapital", "Webhook"], inboundTrades: 6, listedAssets: 22, defaultRoute: "iCapital Workflow", role: "Document and subscription workflow", workflowOwner: "iCapital", fillReturn: "Workflow completion event", contacts: ["Platform Support", "icapital-support@example.com"] },
-  { name: "Schwab Alternative Investments", code: "SCHWAB-AI", status: "Active", systems: ["Manual", "API Planned"], inboundTrades: 4, listedAssets: 9, defaultRoute: "Manual Review", role: "Private asset custody and confirmation", workflowOwner: "PATS Ops", fillReturn: "Ops-entered confirmation", contacts: ["Sofia Kim", "schwab-alt@example.com"] },
-  { name: "Legacy Private Desk", code: "LEGACY", status: "Disconnected", systems: ["Manual"], inboundTrades: 0, listedAssets: 3, defaultRoute: "Manual Review", role: "Legacy private asset processing", workflowOwner: "Ops only", fillReturn: "Unavailable", contacts: ["Support Queue", "legacy-private@example.com"] },
+  { patsBrokerProfileId: "pbp_gsas", vantageBrokerId: "176f7a13d62244845b746b04c79fa621", name: "Goldman Sachs Advisor Solutions", code: "GSAS", status: "Active", systems: ["Vantage broker sync", "DocuSign"], inboundTrades: 24, listedAssets: 18, defaultRoute: "Private Asset Desk", defaultVantageRouterId: "router_gsas_private", role: "Owns private assets, scoped tickers, and workflow rules", workflowOwner: "Broker + PATS Ops", fillReturnMethod: "vantage_blotter", fillReturn: "PATS returns fills to Vantage", contacts: ["Maya Singh", "gsas-private-assets@example.com"] },
+  { patsBrokerProfileId: "pbp_msalt", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", name: "Morgan Stanley Alternatives", code: "MSALT", status: "Active", systems: ["Vantage broker sync", "Manual Review"], inboundTrades: 11, listedAssets: 12, defaultRoute: "Alternatives Desk", defaultVantageRouterId: "router_ms_alt", role: "Owns redemption checks and every-trade approvals", workflowOwner: "Broker workflow", fillReturnMethod: "manual", fillReturn: "Manual confirmation to PATS", contacts: ["Carlos Reed", "ms-alt-ops@example.com"] },
+  { patsBrokerProfileId: "pbp_jpm", vantageBrokerId: "cb2a2ee8e52d0c54e3af17fc32bb84c9", name: "JP Morgan Private Markets", code: "JPM-PM", status: "Active", systems: ["Vantage broker sync"], inboundTrades: 8, listedAssets: 15, defaultRoute: "Private Markets API", defaultVantageRouterId: "router_jpm_pm", role: "Routes validated private asset orders", workflowOwner: "PATS Ops approval", fillReturnMethod: "api_confirmation", fillReturn: "API confirmation", contacts: ["Nina Walsh", "jpm-private@example.com"] },
+  { patsBrokerProfileId: "pbp_icap", vantageBrokerId: "8a4c01a23b574ab5a8c11225efcd2299", name: "iCapital Marketplace", code: "ICAP", status: "Active", systems: ["iCapital", "Webhook planned"], inboundTrades: 6, listedAssets: 22, defaultRoute: "iCapital Workflow", defaultVantageRouterId: null, role: "External document and subscription workflow", workflowOwner: "External platform", fillReturnMethod: "workflow_event", fillReturn: "Workflow completion event", contacts: ["Platform Support", "icapital-support@example.com"] },
+  { patsBrokerProfileId: "pbp_schwab", vantageBrokerId: "b45e6cb2154b4d8e865005c7f1d401cc", name: "Schwab Alternative Investments", code: "SCHWAB-AI", status: "Active", systems: ["Manual"], inboundTrades: 4, listedAssets: 9, defaultRoute: "Manual Review", defaultVantageRouterId: null, role: "Private asset custody and confirmation", workflowOwner: "PATS Ops", fillReturnMethod: "manual", fillReturn: "Ops-entered confirmation", contacts: ["Sofia Kim", "schwab-alt@example.com"] },
+  { patsBrokerProfileId: "pbp_legacy", vantageBrokerId: "legacy_disabled", name: "Legacy Private Desk", code: "LEGACY", status: "Disconnected", systems: ["Manual"], inboundTrades: 0, listedAssets: 3, defaultRoute: "Manual Review", defaultVantageRouterId: null, role: "Legacy private asset processing", workflowOwner: "Ops only", fillReturnMethod: "manual", fillReturn: "Unavailable", contacts: ["Support Queue", "legacy-private@example.com"] },
 ];
 
 const assets: Asset[] = [
-  { ticker: "TECH-A", name: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", className: "Private Equity", structure: "3(c)(7) feeder", sponsor: "TechCorp GP", value: "$2.4M", liquidity: "Low", lockup: "24 months", notice: "90 days", supply: "$12M", units: "48,000" },
-  { ticker: "HEALTH-B", name: "HealthTech Preferred", broker: "Morgan Stanley Alternatives", className: "Venture Capital", structure: "3(c)(1)", sponsor: "HealthTech Partners", value: "$1.9M", liquidity: "Medium", lockup: "12 months", notice: "60 days", supply: "$8M", units: "31,000" },
-  { ticker: "ENERGY-C", name: "CleanEnergy Fund", broker: "JP Morgan Private Markets", className: "Real Assets", structure: "Evergreen", sponsor: "CleanEnergy GP", value: "$3.2M", liquidity: "Medium", lockup: "18 months", notice: "45 days", supply: "$15M", units: "62,500" },
-  { ticker: "FINTECH-D", name: "FinTech Growth", broker: "iCapital Marketplace", className: "Private Credit", structure: "Drawdown", sponsor: "FinTech Capital", value: "$1.5M", liquidity: "High", lockup: "6 months", notice: "30 days", supply: "$6M", units: "18,200" },
+  { privateAssetId: "pa_tech_a", patsBrokerProfileId: "pbp_gsas", brokerScopedTickerId: "bst_tech_a_gsas", ticker: "TECH-A", name: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", assetClass: "private_equity", preceptAssetClass: "equity_alternatives", preceptStyle: "late_stage_venture_growth_equity", fundStructure: "3(c)(7), feeder, drawdown", gpSponsor: "TechCorp Capital", liquidityTerms: "Illiquid / drawdown", lockupPeriod: "24 months", noticePeriod: "90 days", taxDocumentSource: "UMB", documentExecutionPlatform: "DocuSign", status: "active", className: "Private Equity", structure: "3(c)(7) feeder", sponsor: "TechCorp GP", value: "$2.4M", liquidity: "Low", lockup: "24 months", notice: "90 days", supply: "$12M", units: "48,000" },
+  { privateAssetId: "pa_health_b", patsBrokerProfileId: "pbp_msalt", brokerScopedTickerId: "bst_health_b_ms", ticker: "HEALTH-B", name: "HealthTech Preferred", broker: "Morgan Stanley Alternatives", assetClass: "venture_capital", preceptAssetClass: "equity_alternatives", preceptStyle: "healthcare_growth", fundStructure: "3(c)(1), subscription", gpSponsor: "HealthTech Partners", liquidityTerms: "Quarterly windows", lockupPeriod: "12 months", noticePeriod: "60 days", taxDocumentSource: "Sponsor portal", documentExecutionPlatform: "iCapital", status: "active", className: "Venture Capital", structure: "3(c)(1)", sponsor: "HealthTech Partners", value: "$1.9M", liquidity: "Medium", lockup: "12 months", notice: "60 days", supply: "$8M", units: "31,000" },
+  { privateAssetId: "pa_energy_c", patsBrokerProfileId: "pbp_jpm", brokerScopedTickerId: "bst_energy_c_jpm", ticker: "ENERGY-C", name: "CleanEnergy Fund", broker: "JP Morgan Private Markets", assetClass: "real_assets", preceptAssetClass: "real_assets", preceptStyle: "infrastructure_energy", fundStructure: "Evergreen", gpSponsor: "CleanEnergy GP", liquidityTerms: "Semi-annual liquidity", lockupPeriod: "18 months", noticePeriod: "45 days", taxDocumentSource: "UMB", documentExecutionPlatform: "Manual Upload", status: "restricted", className: "Real Assets", structure: "Evergreen", sponsor: "CleanEnergy GP", value: "$3.2M", liquidity: "Medium", lockup: "18 months", notice: "45 days", supply: "$15M", units: "62,500" },
+  { privateAssetId: "pa_fintech_d", patsBrokerProfileId: "pbp_icap", brokerScopedTickerId: "bst_fintech_d_icap", ticker: "FINTECH-D", name: "FinTech Growth", broker: "iCapital Marketplace", assetClass: "private_credit", preceptAssetClass: "credit_alternatives", preceptStyle: "growth_credit", fundStructure: "Drawdown", gpSponsor: "FinTech Capital", liquidityTerms: "Monthly liquidity", lockupPeriod: "6 months", noticePeriod: "30 days", taxDocumentSource: "iCapital", documentExecutionPlatform: "iCapital", status: "active", className: "Private Credit", structure: "Drawdown", sponsor: "FinTech Capital", value: "$1.5M", liquidity: "High", lockup: "6 months", notice: "30 days", supply: "$6M", units: "18,200" },
 ];
 
 const workflows = [
-  { id: "WT-001", policy: "Once per user", name: "Subscription setup - GSAS PE", type: "Subscription", broker: "Goldman Sachs Advisor Solutions", asset: "TechCorp Series A", status: "Active", requirements: "7 requirements", updated: "12 min ago", focus: "Subscription agreement, investor signature, Ops approval" },
-  { id: "WT-002", policy: "Every trade", name: "Redemption checks - HealthTech", type: "Redemption", broker: "Morgan Stanley Alternatives", asset: "HealthTech Preferred", status: "Active", requirements: "6 requirements", updated: "38 min ago", focus: "Notice period, liquidity review, broker approval" },
-  { id: "WT-003", policy: "Once per user", name: "iCapital approval package", type: "Approval", broker: "iCapital Marketplace", asset: "FinTech Growth", status: "Active", requirements: "5 requirements", updated: "1 hour ago", focus: "External platform, approval callback, manual review" },
+  { id: "wt_tech_subscription", policy: "once_per_user", name: "TechCorp subscription workflow", type: "Subscription", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", broker: "Goldman Sachs Advisor Solutions", asset: "TechCorp Series A", status: "active", requirements: "4 requirements", updated: "12 min ago", focus: "Subscription agreement, investor signature, Ops approval", requirementTypes: ["document", "signature", "approval", "manual_review"] },
+  { id: "wt_health_redemption", policy: "every_trade", name: "HealthTech redemption workflow", type: "Redemption", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", broker: "Morgan Stanley Alternatives", asset: "HealthTech Preferred", status: "active", requirements: "5 requirements", updated: "38 min ago", focus: "Notice period, liquidity review, broker approval", requirementTypes: ["notice_period_check", "liquidity_check", "document", "approval", "manual_review"] },
+  { id: "wt_fintech_subscription", policy: "once_per_user", name: "FinTech iCapital package", type: "Approval", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", broker: "iCapital Marketplace", asset: "FinTech Growth", status: "active", requirements: "3 requirements", updated: "1 hour ago", focus: "External platform, approval callback, manual review", requirementTypes: ["external_platform", "signature", "manual_review"] },
 ];
 
 const documents = [
-  { name: "Subscription Agreement", tradeId: "TRD-001", asset: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", platform: "DocuSign", envelope: "DS-44912", assignee: "Sarah Chen", status: "Sent", due: "Today", callback: "Waiting for signature event" },
-  { name: "Accreditation Letter", tradeId: "TRD-002", asset: "HealthTech Preferred", broker: "Morgan Stanley Alternatives", platform: "iCapital", envelope: "ICA-7810", assignee: "Ops Team", status: "Signed", due: "May 3", callback: "Signature callback received" },
-  { name: "Tax Package", tradeId: "TRD-003", asset: "CleanEnergy Fund", broker: "JP Morgan Private Markets", platform: "UMB", envelope: "-", assignee: "Tax Ops", status: "Not Started", due: "May 8", callback: "Not created yet" },
-  { name: "Redemption Notice", tradeId: "TRD-004", asset: "FinTech Growth", broker: "iCapital Marketplace", platform: "Manual Upload", envelope: "MAN-2204", assignee: "Sarah Chen", status: "Failed", due: "Overdue", callback: "Upload rejected" },
+  { documentId: "doc_sub_001", workflowRequirementId: "wr_subscription_agreement", tradeWorkflowStepId: "tws_doc_001", name: "Subscription Agreement", tradeId: "it_d672e1c1", asset: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", platform: "DocuSign", envelope: "DS-44912", assignee: "Sarah Chen", status: "sent", due: "Today", callback: "Waiting for signature event" },
+  { documentId: "doc_sig_001", workflowRequirementId: "wr_investor_signature", tradeWorkflowStepId: "tws_sig_001", name: "Investor Signature", tradeId: "it_d672e1c1", asset: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", platform: "DocuSign", envelope: "DS-44912", assignee: "Investor", status: "pending", due: "Today", callback: "Envelope created" },
+  { documentId: "doc_redemption_001", workflowRequirementId: "wr_redemption_notice", tradeWorkflowStepId: "tws_notice_001", name: "Redemption Notice", tradeId: "it_cb41f317", asset: "HealthTech Preferred", broker: "Morgan Stanley Alternatives", platform: "Manual Upload", envelope: "manual_upload", assignee: "Ops Team", status: "blocked", due: "Overdue", callback: "Missing uploaded file" },
+  { documentId: "doc_tax_001", workflowRequirementId: "wr_tax_package", tradeWorkflowStepId: "tws_tax_001", name: "Tax Package", tradeId: "it_a71e6d82", asset: "CleanEnergy Fund", broker: "JP Morgan Private Markets", platform: "UMB", envelope: "-", assignee: "Tax Ops", status: "pending", due: "May 8", callback: "Manual document module pending" },
 ];
 
 const workflowReviewChecks = [
@@ -139,10 +168,10 @@ const workflowReviewChecks = [
 ];
 
 const externalTrades = [
-  { externalId: "VNT-88301", source: "Vantage Blotter", broker: "Goldman Sachs Advisor Solutions", ticker: "TECH-A", asset: "TechCorp Series A", validation: "Validated", execution: "Routed", received: "2 min ago" },
-  { externalId: "VNT-10422", source: "Vantage Blotter", broker: "iCapital Marketplace", ticker: "FINTECH-D", asset: "FinTech Growth", validation: "Needs Review", execution: "Workflow Pending", received: "8 min ago" },
-  { externalId: "VNT-7712", source: "Vantage Blotter", broker: "Morgan Stanley Alternatives", ticker: "HEALTH-B", asset: "HealthTech Preferred", validation: "Rejected", execution: "Rejected", received: "21 min ago" },
-  { externalId: "VNT-55291", source: "Vantage Blotter", broker: "JP Morgan Private Markets", ticker: "ENERGY-C", asset: "CleanEnergy Fund", validation: "Validated", execution: "Approved", received: "44 min ago" },
+  { externalId: "vt_eligible_001", inboundTradeId: "it_4eb00593", source: "Vantage API", vantageBrokerId: "176f7a13d62244845b746b04c79fa621", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", brokerScopedTickerId: "bst_tech_a_gsas", broker: "Goldman Sachs Advisor Solutions", ticker: "TECH-A", asset: "TechCorp Series A", validation: "validated", execution: "already_eligible", received: "2 min ago" },
+  { externalId: "vt_no_eligibility_001", inboundTradeId: "it_d672e1c1", source: "Vantage API", vantageBrokerId: "176f7a13d62244845b746b04c79fa621", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", brokerScopedTickerId: "bst_tech_a_gsas", broker: "Goldman Sachs Advisor Solutions", ticker: "TECH-A", asset: "TechCorp Series A", validation: "workflow_required", execution: "no_eligibility", received: "8 min ago" },
+  { externalId: "vt_every_trade_001", inboundTradeId: "it_cb41f317", source: "Vantage API", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", brokerScopedTickerId: "bst_health_b_ms", broker: "Morgan Stanley Alternatives", ticker: "HEALTH-B", asset: "HealthTech Preferred", validation: "workflow_required", execution: "every_trade", received: "21 min ago" },
+  { externalId: "vt_unresolved_001", inboundTradeId: "it_a418e890", source: "Vantage API", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", patsBrokerProfileId: "-", privateAssetId: "-", brokerScopedTickerId: "-", broker: "Morgan Stanley Alternatives", ticker: "DOES-NOT-EXIST", asset: "Not resolved", validation: "unresolved", execution: "unresolved", received: "44 min ago" },
 ];
 
 const fillDeliveries = [
@@ -153,44 +182,53 @@ const fillDeliveries = [
 
 const executionFlows = [
   {
-    tradeId: "TRD-001",
+    tradeWorkflowId: "tw_001",
+    inboundTradeId: "it_d672e1c1",
+    workflowTemplateId: "wt_tech_subscription",
+    tradeId: "TRD-002",
     ticker: "TECH-A",
     broker: "Goldman Sachs Advisor Solutions",
     asset: "TechCorp Series A",
     fillId: "FILL-001",
-    status: "Complete",
-    currentStep: 6,
+    status: "in_progress",
+    currentStep: 2,
     blockedStep: null,
     destination: "Vantage Blotter",
     lastUpdate: "2 min ago",
   },
   {
-    tradeId: "TRD-002",
+    tradeWorkflowId: "tw_002",
+    inboundTradeId: "it_cb41f317",
+    workflowTemplateId: "wt_health_redemption",
+    tradeId: "TRD-003",
     ticker: "HEALTH-B",
     broker: "Morgan Stanley Alternatives",
     asset: "HealthTech Preferred",
     fillId: "Pending",
-    status: "Docs Pending",
+    status: "pending",
     currentStep: 2,
     blockedStep: 2,
     destination: "Vantage Blotter",
     lastUpdate: "8 min ago",
   },
   {
-    tradeId: "TRD-003",
-    ticker: "ENERGY-C",
-    broker: "JP Morgan Private Markets",
-    asset: "CleanEnergy Fund",
-    fillId: "FILL-003",
-    status: "Returning Fill",
-    currentStep: 5,
+    tradeWorkflowId: "tw_003",
+    inboundTradeId: "it_4eb00593",
+    workflowTemplateId: "wt_tech_subscription",
+    tradeId: "TRD-001",
+    ticker: "TECH-A",
+    broker: "Goldman Sachs Advisor Solutions",
+    asset: "TechCorp Series A",
+    fillId: "pending",
+    status: "completed",
+    currentStep: 6,
     blockedStep: null,
     destination: "Vantage Blotter",
     lastUpdate: "4 min ago",
   },
 ];
 
-const executionSteps = ["Received", "Routed", "Workflow", "Docs signed", "Approved", "Fill received", "Sent back"];
+const executionSteps = ["Inbound trade", "Ticker resolved", "Workflow required", "Required steps", "Eligibility update", "Validated", "Ready for execution"];
 
 const activityEvents = [
   "Trade received from Vantage Blotter",
@@ -211,14 +249,14 @@ const alerts = [
   { severity: "Low", entity: "Credit Suisse", issue: "External system disconnected", status: "Open", owner: "Integrations", created: "3 hours ago" },
 ];
 
-const tradeGridClass = "grid-cols-[0.9fr_1.1fr_1.35fr_0.9fr_0.9fr_0.9fr_0.75fr_0.75fr]";
+const tradeGridClass = "grid-cols-[0.9fr_0.8fr_1fr_0.75fr_0.8fr_0.9fr_0.9fr_0.75fr]";
 
 function toneFor(value: string): StatusTone {
-  const lower = value.toLowerCase();
-  if (["buy", "subscribe", "filled", "active", "validated", "executed", "sent", "signed", "completed", "connected", "approved", "fill returned"].includes(lower)) return "green";
-  if (["pending", "partial", "in progress", "retrying", "needs review", "medium", "workflow pending", "docs pending", "returning fill", "waiting"].includes(lower)) return "yellow";
-  if (["sell", "redeem", "failed", "rejected", "blocked", "critical", "high", "low", "disconnected"].includes(lower)) return "red";
-  if (["received", "routed", "open"].includes(lower)) return "blue";
+  const lower = value.toLowerCase().replaceAll("_", " ");
+  if (["buy", "subscribe", "filled", "active", "validated", "already eligible", "no template", "executed", "sent", "signed", "completed", "eligible", "connected", "approved", "fill returned"].includes(lower)) return "green";
+  if (["pending", "partial", "in progress", "retrying", "needs review", "workflow required", "no eligibility", "every trade", "medium", "workflow pending", "docs pending", "returning fill", "waiting"].includes(lower)) return "yellow";
+  if (["sell", "redeem", "failed", "rejected", "blocked", "critical", "high", "low", "disconnected", "unresolved", "revoked", "expired"].includes(lower)) return "red";
+  if (["received", "routed", "open", "once per user"].includes(lower)) return "blue";
   if (["draft", "not started"].includes(lower)) return "gray";
   return "purple";
 }
@@ -235,10 +273,14 @@ function badgeClasses(tone: StatusTone) {
   return classes[tone];
 }
 
+function displayLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 function StatusBadge({ value, tone }: { value: string; tone?: StatusTone }) {
   return (
     <span className={`inline-flex h-4 w-fit items-center whitespace-nowrap rounded border px-1.5 text-[8px] font-semibold leading-none tracking-normal ${badgeClasses(tone ?? toneFor(value))}`}>
-      {value}
+      {displayLabel(value)}
     </span>
   );
 }
@@ -393,11 +435,11 @@ function PageTitle({ title, subtitle, action }: { title: string; subtitle: strin
 
 function BlotterLifecycleStrip() {
   const steps = [
-    ["1", "Vantage Blotter", "Trade submitted"],
-    ["2", "PATS intake", "Validate and normalize"],
-    ["3", "Asset broker", "Route by broker ticker"],
-    ["4", "Workflow", "Docs and approvals"],
-    ["5", "Fill return", "Send fill back"],
+    ["1", "Inbound trade", "POST /inbound-trades"],
+    ["2", "Ticker resolution", "vantageBrokerId + ticker"],
+    ["3", "Private asset", "broker-scoped ticker match"],
+    ["4", "Workflow decision", "template + completionPolicy"],
+    ["5", "Eligibility", "skip or require steps"],
   ];
 
   return (
@@ -405,9 +447,9 @@ function BlotterLifecycleStrip() {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-slate-100">Operational lifecycle</h2>
-          <p className="mt-0.5 text-[11px] text-slate-500">Vantage Blotter to private asset broker and back to Vantage with normalized fill data.</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Mocked UI, aligned to the backend entities and decisions persisted by PATS.</p>
         </div>
-        <StatusBadge value="Live workflow" tone="green" />
+        <StatusBadge value="backend aligned mock" tone="green" />
       </div>
       <div className="grid grid-cols-5 gap-2">
         {steps.map(([number, title, caption], index) => (
@@ -431,17 +473,17 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
       <PageTitle title="Operations Dashboard" subtitle="Private asset operating layer for broker-owned assets, workflow rules, and Vantage trade intake" />
       <BlotterLifecycleStrip />
       <div className="grid grid-cols-4 gap-4">
-        <MetricCard label="Active brokers" value="5" delta="+1" />
-        <MetricCard label="Broker-owned assets" value="77" delta="+8" />
-        <MetricCard label="Scoped tickers" value="64" delta="+11" />
-        <MetricCard label="Workflow templates" value="18" delta="+3" />
+        <MetricCard label="Active broker profiles" value="5" delta="pbp_" />
+        <MetricCard label="Private assets" value="4" delta="pa_" />
+        <MetricCard label="Scoped tickers" value="4" delta="bst_" />
+        <MetricCard label="Workflow required" value="2" delta="it_" />
       </div>
       <div className="mt-5 grid grid-cols-[2fr_1fr] gap-5">
         <ShellCard className="p-5">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">Vantage inbound trade preview</h2>
-              <p className="mt-1 text-xs text-slate-500">Incoming trades are resolved through broker-scoped tickers before workflow checks</p>
+              <h2 className="text-base font-semibold text-white">Inbound trade decision preview</h2>
+              <p className="mt-1 text-xs text-slate-500">Every mock row uses the same persisted fields returned by the inbound trade backend</p>
             </div>
             <button onClick={() => onSelect("externalTrades")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">
               View All <ChevronRight className="h-3.5 w-3.5" />
@@ -449,12 +491,13 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
           </div>
           <div className="space-y-2">
             {externalTrades.slice(0, 4).map((trade) => (
-              <button key={trade.externalId} onClick={() => onSelect("externalTrades")} className="grid w-full grid-cols-[0.85fr_1fr_0.7fr_1fr_0.8fr] items-center rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-left text-xs transition hover:bg-slate-800/40">
-                <span className="font-semibold text-sky-300">{trade.externalId}</span>
-                <span className="text-slate-200">{trade.broker}</span>
+              <button key={trade.externalId} onClick={() => onSelect("externalTrades")} className="grid w-full grid-cols-[0.9fr_0.8fr_0.65fr_0.9fr_0.85fr_0.75fr] items-center rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-left text-xs transition hover:bg-slate-800/40">
+                <span className="font-semibold text-sky-300">{trade.inboundTradeId}</span>
+                <span className="text-slate-400">{trade.patsBrokerProfileId}</span>
                 <span className="font-semibold text-slate-100">{trade.ticker}</span>
-                <span className="text-slate-400">{trade.asset}</span>
+                <span className="text-slate-400">{trade.privateAssetId}</span>
                 <StatusBadge value={trade.validation} />
+                <StatusBadge value={trade.execution} />
               </button>
             ))}
           </div>
@@ -529,13 +572,13 @@ function TradeRow({ trade, compact = false, onClick }: { trade: Trade; compact?:
         </>
       ) : (
         <>
-          <span className="text-xs text-sky-300">{trade.id}</span>
+          <span className="text-xs text-sky-300">{trade.inboundTradeId}</span>
           <span className="text-sm font-semibold text-slate-100">{trade.ticker}</span>
-          <span className="text-slate-300">{trade.broker}</span>
+          <span className="text-slate-300">{trade.patsBrokerProfileId ?? "-"}</span>
           <span><StatusBadge value={trade.type} /></span>
-          <span className="text-right font-semibold text-slate-100">{trade.quantity}</span>
+          <span className="text-xs text-slate-400">{trade.privateAssetId ?? "-"}</span>
           <span><StatusBadge value={trade.status} /></span>
-          <span className="text-center text-xs text-slate-400">{trade.routing}</span>
+          <span><StatusBadge value={trade.workflowReason} /></span>
           <span className="text-right text-xs text-slate-500">{trade.time}</span>
         </>
       )}
@@ -548,10 +591,10 @@ function Trades({ openNewTrade, openTrade }: { openNewTrade: () => void; openTra
     <>
       <PageTitle
         title="PATS Trade Blotter"
-        subtitle="Trades received from Vantage and routed to private asset brokers"
+        subtitle="Mocked inbound trades using the exact IDs, statuses, and workflow decisions persisted by the backend"
         action={<button onClick={openNewTrade} className="flex h-10 items-center gap-2 rounded-lg bg-sky-500 px-4 text-sm font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-4 w-4" />New Manual Trade</button>}
       />
-      <Toolbar placeholder="Search by ticker, broker, or ID...">
+      <Toolbar placeholder="Search by inboundTradeId, ticker, broker profile, or privateAssetId...">
         <button className="rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">All Status</button>
         <button className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200"><Filter className="h-4 w-4" />Filters</button>
         <button className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200"><Download className="h-4 w-4" />Export</button>
@@ -579,11 +622,11 @@ function TradeTableHeader() {
     <div className={`grid ${tradeGridClass} border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600`}>
       <span>Trade ID</span>
       <span>Ticker</span>
-      <span>Broker</span>
+      <span>Broker profile</span>
       <span>Type</span>
-      <span className="text-right">Quantity</span>
+      <span>Private asset</span>
       <span>Status</span>
-      <span className="text-center">Routing</span>
+      <span>Decision</span>
       <span className="text-right">Time</span>
     </div>
   );
@@ -592,20 +635,20 @@ function TradeTableHeader() {
 function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
   return (
     <>
-      <PageTitle title="Inbound Blotter Trades" subtitle="Trades accepted from Vantage before broker routing and workflow validation" />
-      <Toolbar placeholder="Search external ID, source, broker, or ticker...">
+      <PageTitle title="Inbound Blotter Trades" subtitle="Trades accepted from Vantage before ticker resolution, workflow decision, and eligibility checks" />
+      <Toolbar placeholder="Search inboundTradeId, vantageTradeId, broker profile, private asset, or ticker...">
         <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
       </Toolbar>
       <ShellCard className="overflow-hidden">
-        <TableHeader columns={["Blotter ID", "Source", "Private Broker", "Ticker", "Asset", "Validation", "PATS Status", "Received"]} />
+        <TableHeader columns={["Inbound ID", "Vantage Trade", "Broker Profile", "Ticker", "Private Asset", "Status", "Reason", "Received"]} />
         <div className="divide-y divide-slate-800/80">
           {externalTrades.map((item) => (
             <button key={item.externalId} onClick={() => openItem(item.externalId)} className="grid w-full grid-cols-8 items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
-              <span className="text-xs font-medium text-sky-300">{item.externalId}</span>
-              <span className="text-slate-200">{item.source}</span>
-              <span className="text-slate-200">{item.broker}</span>
+              <span className="text-xs font-medium text-sky-300">{item.inboundTradeId}</span>
+              <span className="text-xs text-slate-400">{item.externalId}</span>
+              <span className="text-xs text-slate-300">{item.patsBrokerProfileId}</span>
               <span className="text-sm font-semibold text-slate-100">{item.ticker}</span>
-              <span className="text-sm text-slate-300">{item.asset}</span>
+              <span className="text-xs text-slate-300">{item.privateAssetId}</span>
               <span><StatusBadge value={item.validation} /></span>
               <span><StatusBadge value={item.execution} /></span>
               <span className="text-xs text-slate-500">{item.received}</span>
@@ -622,12 +665,12 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
 
   return (
     <>
-      <PageTitle title="Asset Brokers" subtitle="Broker owner records for private assets, scoped tickers, workflow rules, and operational permissions" action={<button onClick={openNewBroker} className="flex h-9 items-center gap-2 rounded-md bg-sky-500 px-3.5 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Enable Broker Owner</button>} />
-      <Toolbar placeholder="Search private asset broker, ticker, workflow, or contact..." />
+      <PageTitle title="Asset Brokers" subtitle="PATS broker profiles mirror Vantage brokers and add operational config for private assets" action={<button onClick={openNewBroker} className="flex h-9 items-center gap-2 rounded-md bg-sky-500 px-3.5 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Enable Broker Owner</button>} />
+      <Toolbar placeholder="Search patsBrokerProfileId, vantageBrokerId, broker, ticker, workflow, or contact..." />
       <ShellCard className="overflow-hidden">
         <div className="grid grid-cols-[1.45fr_0.65fr_0.75fr_1.25fr_1fr_0.75fr_0.75fr_0.6fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
           <span>Private broker</span>
-          <span>Code</span>
+          <span>PATS ID</span>
           <span>Status</span>
           <span>Owns in PATS</span>
           <span>Workflow owner</span>
@@ -650,7 +693,7 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
                     <span className={`h-1.5 w-1.5 rounded-full ${broker.status === "Active" ? "bg-emerald-400" : "bg-slate-500"}`} />
                     <span className="font-semibold text-slate-100">{broker.name}</span>
                   </span>
-                  <span className="text-xs text-slate-500">{broker.code}</span>
+                  <span className="text-xs text-slate-500">{broker.patsBrokerProfileId}</span>
                   <span><StatusBadge value={broker.status} /></span>
                   <span className="text-xs text-slate-400">{broker.role}</span>
                   <span className="text-xs text-slate-400">{broker.workflowOwner}</span>
@@ -662,11 +705,11 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
                   <div className="border-t border-slate-800 bg-slate-950/35 px-5 py-4">
                     <div className="grid grid-cols-[0.9fr_1.2fr_1fr] gap-5">
                       <div className="grid grid-cols-2 gap-4">
-                        <Info label="Broker role" value="Private asset owner" />
-                        <Info label="Vantage source" value="Broker reference" />
+                        <Info label="patsBrokerProfileId" value={broker.patsBrokerProfileId} />
+                        <Info label="vantageBrokerId" value={broker.vantageBrokerId} />
                         <Info label="Listed assets" value={broker.listedAssets.toString()} />
-                        <Info label="Short code" value={broker.code} />
-                        <Info label="Fill return" value={broker.fillReturn} />
+                        <Info label="defaultVantageRouterId" value={broker.defaultVantageRouterId ?? "-"} />
+                        <Info label="fillReturnMethod" value={broker.fillReturnMethod} />
                         <Info label="Workflow owner" value={broker.workflowOwner} />
                       </div>
                       <div>
@@ -712,15 +755,15 @@ function PrivateAssets() {
 
   return (
     <>
-      <PageTitle title="Private Assets" subtitle="Broker-owned private asset catalog with scoped tickers and workflow requirements" />
-      <Toolbar placeholder="Search by ticker, name, or broker...">
+      <PageTitle title="Private Assets" subtitle="Broker-owned private asset catalog using the fields persisted in PrivateAssetRegistry" />
+      <Toolbar placeholder="Search privateAssetId, patsBrokerProfileId, ticker, name, or broker...">
         <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
       </Toolbar>
       <ShellCard className="overflow-hidden">
         <div className="grid grid-cols-[0.75fr_1.45fr_1fr_1fr_1fr_0.75fr_0.8fr_0.8fr_0.6fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
           <span>Ticker</span>
           <span>Asset</span>
-          <span>Broker</span>
+          <span>PrivateAsset ID</span>
           <span>Class</span>
           <span>Structure</span>
           <span>Liquidity</span>
@@ -743,7 +786,7 @@ function PrivateAssets() {
                     <span className="block font-semibold text-slate-100">{asset.name}</span>
                     <span className="mt-0.5 block text-[11px] text-slate-500">{asset.sponsor}</span>
                   </span>
-                  <span className="text-xs text-slate-400">{asset.broker}</span>
+                  <span className="text-xs text-slate-400">{asset.privateAssetId}</span>
                   <span className="text-xs text-slate-400">{asset.className}</span>
                   <span className="text-xs text-slate-400">{asset.structure}</span>
                   <span><StatusBadge value={asset.liquidity} tone={asset.liquidity === "High" ? "green" : asset.liquidity === "Medium" ? "yellow" : "red"} /></span>
@@ -755,18 +798,20 @@ function PrivateAssets() {
                   <div className="border-t border-slate-800 bg-slate-950/35 px-5 py-4">
                     <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-5">
                       <div className="grid grid-cols-2 gap-4">
-                        <Info label="Asset class" value={asset.className} />
-                        <Info label="Fund structure" value={asset.structure} />
-                        <Info label="Sponsor" value={asset.sponsor} />
-                        <Info label="Liquidity" value={asset.liquidity} />
-                        <Info label="Lock-up" value={asset.lockup} />
-                        <Info label="Notice" value={asset.notice} />
+                        <Info label="privateAssetId" value={asset.privateAssetId} />
+                        <Info label="patsBrokerProfileId" value={asset.patsBrokerProfileId} />
+                        <Info label="assetClass" value={asset.assetClass} />
+                        <Info label="preceptAssetClass" value={asset.preceptAssetClass} />
+                        <Info label="preceptStyle" value={asset.preceptStyle} />
+                        <Info label="status" value={asset.status} />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <Info label="Supply limit" value={asset.supply} />
-                        <Info label="Units available" value={asset.units} />
-                        <Info label="Current value" value={asset.value} />
-                        <Info label="Broker" value={asset.broker} />
+                        <Info label="fundStructure" value={asset.fundStructure} />
+                        <Info label="gpSponsor" value={asset.gpSponsor} />
+                        <Info label="liquidityTerms" value={asset.liquidityTerms} />
+                        <Info label="lockupPeriod" value={asset.lockupPeriod} />
+                        <Info label="noticePeriod" value={asset.noticePeriod} />
+                        <Info label="documentPlatform" value={asset.documentExecutionPlatform} />
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-slate-300">Broker-owned setup</p>
@@ -778,7 +823,7 @@ function PrivateAssets() {
                           ))}
                         </div>
                         <div className="mt-3 rounded-md border border-slate-800 bg-[#101318] px-3 py-2 text-xs text-slate-400">
-                          {asset.broker} {"->"} {asset.ticker} {"->"} {asset.name}
+                          {asset.patsBrokerProfileId} {"->"} {asset.brokerScopedTickerId} {"->"} {asset.privateAssetId}
                         </div>
                       </div>
                     </div>
@@ -796,7 +841,7 @@ function PrivateAssets() {
 function Workflows() {
   return (
     <>
-      <PageTitle title="Workflow Templates" subtitle="Reusable broker and private asset requirements before a trade can be routed" action={<button className="flex h-9 items-center gap-2 rounded-md bg-sky-500 px-3.5 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />New Template</button>} />
+      <PageTitle title="Workflow Templates" subtitle="Reusable requirements linked to one broker and one private asset, with once_per_user or every_trade policy" action={<button className="flex h-9 items-center gap-2 rounded-md bg-sky-500 px-3.5 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />New Template</button>} />
       <div className="grid grid-cols-[0.85fr_1.25fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
@@ -812,6 +857,7 @@ function Workflows() {
                     <StatusBadge value={flow.status} />
                   </div>
                   <h3 className="mt-2 text-sm font-semibold text-slate-100">{flow.name}</h3>
+                  <p className="mt-1 text-[11px] text-slate-500">{flow.patsBrokerProfileId} / {flow.privateAssetId}</p>
                   <p className="mt-1 text-xs text-slate-500">{flow.broker} · {flow.asset}</p>
                 </div>
                 <div className="text-right">
@@ -821,7 +867,10 @@ function Workflows() {
               </div>
               <div className="mt-3 grid grid-cols-[1fr_auto] gap-3 rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs">
                 <span className="text-slate-400">{flow.focus}</span>
-                <StatusBadge value={flow.policy} tone={flow.policy === "Every trade" ? "yellow" : "blue"} />
+                <StatusBadge value={flow.policy} tone={flow.policy === "every_trade" ? "yellow" : "blue"} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {flow.requirementTypes.map((type) => <StatusBadge key={type} value={type} tone="gray" />)}
               </div>
             </div>
           ))}
@@ -860,7 +909,7 @@ function Workflows() {
             })}
           </div>
           <div className="mt-4 rounded-md border border-slate-800 bg-[#0c1117] p-3 text-xs text-slate-400">
-            This is not a trade execution yet. It is the reusable rule set PATS will check when a trade arrives from Vantage.
+            This is the template level. When an inbound trade needs workflow, a TradeWorkflow instance uses these requirements as real steps.
           </div>
         </ShellCard>
       </div>
@@ -934,22 +983,22 @@ function Documents() {
 function Execution() {
   return (
     <>
-      <PageTitle title="Execution Flow" subtitle="Trade-level tracking after Vantage sends an order and PATS applies ticker resolution and workflow eligibility" />
+      <PageTitle title="Execution Flow" subtitle="TradeWorkflow instances and step status before a trade can move from workflow_required to validated" />
       <div className="space-y-4">
         {executionFlows.map((flow) => (
           <ShellCard key={flow.tradeId} className="p-5">
             <div className="flex items-start justify-between gap-6">
               <div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-sky-300">{flow.tradeId}</span>
+                  <span className="text-sm font-semibold text-sky-300">{flow.tradeWorkflowId}</span>
                   <span className="text-sm font-semibold text-white">{flow.ticker}</span>
                   <StatusBadge value={flow.status} />
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{flow.asset} · {flow.broker}</p>
               </div>
               <div className="grid grid-cols-3 gap-5 text-right">
-                <Info label="Fill ID" value={flow.fillId} />
-                <Info label="Return target" value={flow.destination} />
+                <Info label="InboundTrade" value={flow.inboundTradeId} />
+                <Info label="Template" value={flow.workflowTemplateId} />
                 <Info label="Updated" value={flow.lastUpdate} />
               </div>
             </div>
