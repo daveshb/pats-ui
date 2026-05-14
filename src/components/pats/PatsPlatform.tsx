@@ -917,7 +917,7 @@ function PrivateAssets() {
   );
 }
 
-function Workflows() {
+function WorkflowsLegacy() {
   return (
     <>
       <PageTitle title="Workflows" subtitle="Business rules that decide whether a trade can move forward or needs operational steps first" action={<button className="flex h-9 items-center gap-2 rounded-md bg-sky-500 px-3.5 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />New Template</button>} />
@@ -990,6 +990,145 @@ function Workflows() {
             This is the template level. When an inbound trade needs workflow, a TradeWorkflow instance uses these requirements as real steps.
           </div>
         </ShellCard>
+      </div>
+    </>
+  );
+}
+
+function Workflows() {
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(workflows[0]?.id ?? "");
+  const selectedWorkflow = workflows.find((flow) => flow.id === selectedWorkflowId) ?? workflows[0];
+  const selectedAsset = assets.find((asset) => asset.privateAssetId === selectedWorkflow.privateAssetId);
+  const selectedRequirements = selectedWorkflow.requirementTypes.map((type, index) => ({
+    type,
+    title: displayLabel(type),
+    required: true,
+    sortOrder: index + 1,
+    status: "active",
+  }));
+
+  return (
+    <>
+      <PageTitle
+        title="Workflows"
+        subtitle="Rules for each private asset that decide if a trade can move forward or needs steps first"
+        action={
+          <div className="flex gap-2">
+            <button className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
+            <button className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
+          </div>
+        }
+      />
+      <Toolbar placeholder="Search workflow, broker, private asset, policy, requirement, or status..." />
+      <div className="grid grid-cols-[0.95fr_1.4fr] gap-5">
+        <ShellCard className="overflow-hidden">
+          <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+            <h2 className="text-sm font-semibold text-slate-100">Templates by private asset</h2>
+            <p className="mt-1 text-[11px] text-slate-500">One active template tells PATS what steps are needed for that broker-owned asset.</p>
+          </div>
+          <div className="divide-y divide-slate-800/80">
+            {workflows.map((flow) => {
+              const isSelected = flow.id === selectedWorkflow.id;
+              return (
+                <button
+                  key={flow.id}
+                  onClick={() => setSelectedWorkflowId(flow.id)}
+                  className={`w-full px-5 py-4 text-left transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge value={flow.status} />
+                        <StatusBadge value={displayLabel(flow.policy)} tone={flow.policy === "every_trade" ? "yellow" : "blue"} />
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold text-slate-100">{flow.name}</h3>
+                      <p className="mt-1 text-xs text-slate-500">{flow.broker}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-sky-300">{flow.asset}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold text-slate-300">{flow.requirements}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{flow.updated}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ShellCard>
+
+        <div className="space-y-5">
+          <ShellCard className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{selectedWorkflow.name}</h2>
+                <p className="mt-1 text-xs text-slate-500">{selectedWorkflow.broker} - {selectedWorkflow.asset}</p>
+              </div>
+              <StatusBadge value={selectedWorkflow.status} />
+            </div>
+            <div className="mt-5 grid grid-cols-4 gap-3">
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Private asset</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{selectedWorkflow.asset}</p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Broker</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{selectedWorkflow.broker}</p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">When it applies</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{displayLabel(selectedWorkflow.policy)}</p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Requirements</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{selectedRequirements.length}</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-md border border-slate-800 bg-[#101318] p-3 text-xs text-slate-400">
+              {selectedWorkflow.policy === "once_per_user"
+                ? "Once the user or account completes this workflow, future trades for this asset can skip the same steps through eligibility."
+                : "Every trade for this asset must complete these steps before it can move forward."}
+            </div>
+          </ShellCard>
+
+          <ShellCard className="overflow-hidden">
+            <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+              <h2 className="text-sm font-semibold text-slate-100">Requirements in order</h2>
+              <p className="mt-1 text-[11px] text-slate-500">These are the steps PATS uses when this template creates a trade workflow.</p>
+            </div>
+            <div className="grid grid-cols-[0.35fr_1fr_0.8fr_0.6fr_0.55fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+              <span>Order</span>
+              <span>Requirement</span>
+              <span>Type</span>
+              <span>Required</span>
+              <span>Status</span>
+            </div>
+            {selectedRequirements.map((requirement) => (
+              <div key={`${selectedWorkflow.id}-${requirement.type}`} className="grid grid-cols-[0.35fr_1fr_0.8fr_0.6fr_0.55fr] items-center border-t border-slate-800/80 px-5 py-3 text-sm">
+                <span className="text-xs font-semibold text-slate-500">{requirement.sortOrder}</span>
+                <span className="font-semibold text-slate-100">{requirement.title}</span>
+                <span><StatusBadge value={displayLabel(requirement.type)} tone="gray" /></span>
+                <span className="text-xs text-slate-300">{requirement.required ? "Yes" : "No"}</span>
+                <span><StatusBadge value={requirement.status} /></span>
+              </div>
+            ))}
+          </ShellCard>
+
+          <ShellCard className="p-5">
+            <h2 className="text-sm font-semibold text-white">How this affects a trade</h2>
+            <div className="mt-4 grid grid-cols-5 gap-2">
+              {["Trade received", "Asset matched", "Template checked", selectedWorkflow.policy === "once_per_user" ? "Eligibility checked" : "Steps required", "Trade can continue"].map((step, index) => (
+                <div key={step} className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-sky-400/25 bg-sky-400/10 text-[10px] font-semibold text-sky-300">{index + 1}</span>
+                  <p className="mt-2 text-xs font-semibold text-slate-100">{step}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Info label="Document platform" value={selectedAsset?.documentExecutionPlatform ?? "Not set"} />
+              <Info label="Tax document source" value={selectedAsset?.taxDocumentSource ?? "Not set"} />
+            </div>
+          </ShellCard>
+        </div>
       </div>
     </>
   );
