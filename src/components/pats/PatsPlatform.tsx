@@ -822,75 +822,87 @@ function PrivateAssets() {
 
   return (
     <>
-      <PageTitle title="Private Assets" subtitle="Broker-owned investment products, their terms, document source, and workflow readiness" />
-      <Toolbar placeholder="Search private asset, ticker, broker, sponsor, structure, or document platform...">
+      <PageTitle title="Private Assets" subtitle="Investment products owned by brokers, with their tickers, terms, documents, and workflow rules" />
+      <Toolbar placeholder="Search asset, broker, ticker, sponsor, document platform, or workflow rule...">
         <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
       </Toolbar>
       <ShellCard className="overflow-hidden">
-        <div className="grid grid-cols-[0.75fr_1.45fr_1fr_1fr_1fr_0.75fr_0.8fr_0.8fr_0.6fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
-          <span>Ticker</span>
+        <div className="grid grid-cols-[1.45fr_1.05fr_0.65fr_0.7fr_1fr_0.9fr_1.1fr_0.35fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
           <span>Asset</span>
           <span>Broker</span>
-          <span>Class</span>
-          <span>Structure</span>
-          <span>Liquidity</span>
-          <span className="text-right">Value</span>
-          <span className="text-right">Units</span>
+          <span>Ticker</span>
+          <span>Status</span>
+          <span>Terms</span>
+          <span>Documents</span>
+          <span>Workflow rule</span>
           <span />
         </div>
         <div className="divide-y divide-slate-800/90">
           {assets.map((asset) => {
             const isOpen = expandedAsset === asset.ticker;
+            const workflow = workflows.find((flow) => flow.privateAssetId === asset.privateAssetId);
+            const workflowLabel = workflow ? displayLabel(workflow.policy) : "No workflow";
+            const canTrade = asset.status === "active" && workflow;
 
             return (
               <div key={asset.ticker}>
                 <button
                   onClick={() => setExpandedAsset(isOpen ? null : asset.ticker)}
-                  className="grid w-full grid-cols-[0.75fr_1.45fr_1fr_1fr_1fr_0.75fr_0.8fr_0.8fr_0.6fr] items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65"
+                  className="grid w-full grid-cols-[1.45fr_1.05fr_0.65fr_0.7fr_1fr_0.9fr_1.1fr_0.35fr] items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65"
                 >
-                  <span className="text-sm font-semibold text-sky-300">{asset.ticker}</span>
                   <span>
                     <span className="block font-semibold text-slate-100">{asset.name}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">{asset.sponsor}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">{asset.className} - {asset.gpSponsor}</span>
                   </span>
                   <span className="text-xs text-slate-400">{asset.broker}</span>
-                  <span className="text-xs text-slate-400">{asset.className}</span>
-                  <span className="text-xs text-slate-400">{asset.structure}</span>
-                  <span><StatusBadge value={asset.liquidity} tone={asset.liquidity === "High" ? "green" : asset.liquidity === "Medium" ? "yellow" : "red"} /></span>
-                  <span className="text-right text-sm font-semibold text-slate-100">{asset.value}</span>
-                  <span className="text-right text-sm text-slate-300">{asset.units}</span>
+                  <span className="text-sm font-semibold text-sky-300">{asset.ticker}</span>
+                  <span><StatusBadge value={asset.status} tone={asset.status === "active" ? "green" : asset.status === "restricted" ? "yellow" : "red"} /></span>
+                  <span className="text-xs text-slate-400">{asset.liquidityTerms}</span>
+                  <span className="text-xs text-slate-400">{asset.documentExecutionPlatform}</span>
+                  <span><StatusBadge value={workflowLabel} tone={workflow?.policy === "every_trade" ? "yellow" : workflow ? "blue" : "gray"} /></span>
                   <span className="flex justify-end text-slate-500"><ChevronDown className={`h-4 w-4 transition ${isOpen ? "rotate-180 text-sky-300" : ""}`} /></span>
                 </button>
                 {isOpen && (
                   <div className="border-t border-slate-800 bg-slate-950/35 px-5 py-4">
-                    <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-5">
-                      <div className="grid grid-cols-2 gap-4">
-                        <Info label="Asset class" value={asset.className} />
-                        <Info label="Precept category" value={asset.preceptAssetClass} />
-                        <Info label="Precept style" value={asset.preceptStyle} />
-                        <Info label="Status" value={asset.status} />
-                        <Info label="Broker" value={asset.broker} />
-                        <Info label="Broker ticker" value={asset.ticker} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <Info label="fundStructure" value={asset.fundStructure} />
-                        <Info label="gpSponsor" value={asset.gpSponsor} />
-                        <Info label="liquidityTerms" value={asset.liquidityTerms} />
-                        <Info label="lockupPeriod" value={asset.lockupPeriod} />
-                        <Info label="noticePeriod" value={asset.noticePeriod} />
-                        <Info label="documentPlatform" value={asset.documentExecutionPlatform} />
+                    <div className="grid grid-cols-[0.95fr_1.05fr_1.15fr] gap-5">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-300">Broker setup</p>
+                        <div className="mt-3 grid grid-cols-2 gap-4">
+                          <Info label="Broker" value={asset.broker} />
+                          <Info label="Ticker" value={asset.ticker} />
+                          <Info label="Status" value={displayLabel(asset.status)} />
+                          <Info label="Sponsor" value={asset.gpSponsor} />
+                        </div>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-slate-300">Broker-owned setup</p>
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                          {["Broker owner", "Asset metadata", "Scoped ticker", "Workflow template", "Requirements", "Eligible trading"].map((step, index) => (
-                            <div key={step} className={`rounded-md border px-2.5 py-2 ${index < 5 ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-slate-800 bg-[#101318] text-slate-500"}`}>
+                        <p className="text-xs font-semibold text-slate-300">Investment terms</p>
+                        <div className="mt-3 grid grid-cols-2 gap-4">
+                          <Info label="Asset class" value={asset.className} />
+                          <Info label="Structure" value={asset.fundStructure} />
+                          <Info label="Liquidity" value={asset.liquidityTerms} />
+                          <Info label="Lock-up" value={asset.lockupPeriod} />
+                          <Info label="Notice" value={asset.noticePeriod} />
+                          <Info label="Tax documents" value={asset.taxDocumentSource} />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-300">Trade readiness</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          {[
+                            ["Broker enabled", true],
+                            ["Asset active", asset.status === "active"],
+                            ["Ticker mapped", true],
+                            ["Workflow set", Boolean(workflow)],
+                            ["Documents defined", Boolean(workflow)],
+                            ["Ready to trade", Boolean(canTrade)],
+                          ].map(([step, done]) => (
+                            <div key={step.toString()} className={`rounded-md border px-2.5 py-2 ${done ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-slate-800 bg-[#101318] text-slate-500"}`}>
                               {step}
                             </div>
                           ))}
                         </div>
                         <div className="mt-3 rounded-md border border-slate-800 bg-[#101318] px-3 py-2 text-xs text-slate-400">
-                          {asset.broker} {"->"} {asset.ticker} {"->"} {asset.name}
+                          {workflow ? `${workflow.name} - ${displayLabel(workflow.policy)}` : "No workflow template configured for this asset."}
                         </div>
                       </div>
                     </div>
