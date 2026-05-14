@@ -1315,6 +1315,13 @@ function documentNextAction(doc: typeof documents[number]) {
   return "Review";
 }
 
+function documentPrimaryAction(doc: typeof documents[number]) {
+  if (doc.platform === "Manual Upload") return "Upload document";
+  if (doc.platform === "DocuSign") return "Open signing link";
+  if (doc.platform === "iCapital") return "Open iCapital task";
+  return "Open document";
+}
+
 function Documents() {
   const [selectedDocumentId, setSelectedDocumentId] = useState(documents[0]?.documentId ?? "");
   const selectedDocument = documents.find((doc) => doc.documentId === selectedDocumentId) ?? documents[0];
@@ -1413,7 +1420,7 @@ function Documents() {
             <h2 className="text-sm font-semibold text-white">Backend direction</h2>
             <p className="mt-2 text-xs leading-5 text-slate-500">The first version should support manual Ops upload. DocuSign and iCapital can be added later behind the same document status flow.</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Upload document</button>
+              <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">{documentPrimaryAction(selectedDocument)}</button>
               <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Mark complete</button>
             </div>
           </ShellCard>
