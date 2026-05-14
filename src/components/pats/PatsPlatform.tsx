@@ -285,9 +285,9 @@ function tradeNextAction(trade: Trade) {
 }
 
 function tradeInvestorLabel(trade: Trade) {
-  const user = trade.userId?.replace("user-", "User ") ?? "Unknown user";
-  const account = trade.accountId?.replace("acct-", "Account ") ?? "Unknown account";
-  return `${user} / ${account}`;
+  if (trade.accountId) return trade.accountId.replace("acct-", "Account ");
+  if (trade.userId) return trade.userId.replace("user-", "User ");
+  return "Not assigned";
 }
 
 function StatusBadge({ value, tone }: { value: string; tone?: StatusTone }) {
@@ -416,7 +416,7 @@ function MarketContextBar() {
     ["Operating Date", "May 1, 2026"],
     ["Cutoff", "4:00 PM ET"],
     ["Open Exceptions", "4"],
-    ["Inbound Queue", "12"],
+    ["New Trades", "12"],
     ["Fill SLA", "98.7%"],
   ];
 
@@ -449,8 +449,8 @@ function PageTitle({ title, subtitle, action }: { title: string; subtitle: strin
 function BlotterLifecycleStrip() {
   const steps = [
     ["1", "Trade from Vantage", "External order arrives"],
-    ["2", "PATS intake", "Validate and store"],
-    ["3", "Asset resolution", "Broker ticker match"],
+    ["2", "PATS review", "Check and save"],
+    ["3", "Asset match", "Broker ticker match"],
     ["4", "Workflow decision", "Rules and eligibility"],
     ["5", "Ops workflow", "Documents and approvals"],
     ["6", "Execution", "Future fill process"],
@@ -461,8 +461,8 @@ function BlotterLifecycleStrip() {
     <ShellCard className="mb-5 p-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">End-to-end operating lifecycle</h2>
-          <p className="mt-0.5 text-[11px] text-slate-500">Final product flow from Vantage intake to workflow completion, execution, and return back to Vantage.</p>
+          <h2 className="text-sm font-semibold text-slate-100">Full trade flow</h2>
+          <p className="mt-0.5 text-[11px] text-slate-500">Final product flow from Vantage trade received to workflow completion, execution, and return back to Vantage.</p>
         </div>
         <StatusBadge value="final flow design" tone="blue" />
       </div>
@@ -505,20 +505,20 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
 
   return (
     <>
-      <PageTitle title="Operations Dashboard" subtitle="Private asset operating layer for broker-owned assets, workflow rules, and Vantage trade intake" />
+      <PageTitle title="Operations Dashboard" subtitle="Private asset workspace for broker assets, workflow rules, and Vantage trades" />
       <BlotterLifecycleStrip />
       <div className="grid grid-cols-4 gap-4">
         <MetricCard label="Active brokers" value={activeBrokerCount.toString()} delta="synced" />
         <MetricCard label="Private assets" value={assets.length.toString()} delta="catalogued" />
         <MetricCard label="Trades ready" value={readyCount.toString()} delta="can advance" />
-        <MetricCard label="Needs action" value={(workflowRequiredCount + exceptionCount).toString()} delta="ops queue" />
+        <MetricCard label="Needs action" value={(workflowRequiredCount + exceptionCount).toString()} delta="ops work" />
       </div>
       <div className="mt-5 grid grid-cols-[2fr_1fr] gap-5">
         <ShellCard className="p-5">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">Trade intake queue</h2>
-              <p className="mt-1 text-xs text-slate-500">Aggregated operating view from inbound trades, asset resolution, workflow rules, and eligibility.</p>
+              <h2 className="text-base font-semibold text-white">Trades to review</h2>
+              <p className="mt-1 text-xs text-slate-500">Trades from Vantage with the asset match, workflow result, and next action.</p>
             </div>
             <button onClick={() => onSelect("externalTrades")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">
               View All <ChevronRight className="h-3.5 w-3.5" />
@@ -538,8 +538,8 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
           </div>
         </ShellCard>
         <ShellCard className="p-5">
-          <h2 className="text-base font-semibold text-white">Broker coverage</h2>
-          <p className="mt-1 text-xs text-slate-500">Derived from broker profiles, private assets, scoped tickers, and workflow templates.</p>
+          <h2 className="text-base font-semibold text-white">Broker assets</h2>
+          <p className="mt-1 text-xs text-slate-500">Shows each broker, the assets they own, their tickers, and workflow rules.</p>
           <div className="mt-4 divide-y divide-slate-800">
             {brokers.slice(0, 4).map((broker) => {
               const brokerAssets = assets.filter((asset) => asset.broker === broker.name);
@@ -568,7 +568,7 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
         {[
           ["Workflow follow-up", `${workflowRequiredCount} trades need required steps`, "Documents, signatures, approvals, or manual review must be completed before these trades continue.", "workflow_required"],
           ["Eligibility leverage", `${readyCount} trades can advance`, "These trades either have no template or the user/account already completed the private asset workflow.", "already_eligible"],
-          ["Resolution exceptions", `${exceptionCount} trades need review`, "Ops should fix ticker mappings or review restricted asset conditions before the trade moves forward.", "needs_review"],
+          ["Trades not matched", `${exceptionCount} trades need review`, "Ops should fix ticker mappings or review restricted asset conditions before the trade moves forward.", "needs_review"],
         ].map(([title, value, detail, status]) => (
           <ShellCard key={title} className="p-4">
             <div className="flex items-start justify-between gap-3">
@@ -654,8 +654,8 @@ function Trades({ openNewTrade, openTrade }: { openNewTrade: () => void; openTra
     <>
       <PageTitle
         title="PATS Trade Blotter"
-        subtitle="Normalized operations view after PATS has resolved the trade and decided what needs to happen next"
-        action={<button onClick={openNewTrade} className="flex h-10 items-center gap-2 rounded-lg bg-sky-500 px-4 text-sm font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-4 w-4" />New Manual Trade</button>}
+        subtitle="Trades after PATS checks the broker, asset, workflow, and next action"
+        action={<button onClick={openNewTrade} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />New Manual Trade</button>}
       />
       <Toolbar placeholder="Search trade, ticker, broker, private asset, investor, or workflow status...">
         <button className="rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">All Status</button>
@@ -697,12 +697,12 @@ function TradeTableHeader() {
 function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
   return (
     <>
-      <PageTitle title="Inbound Blotter" subtitle="Raw trade intake from Vantage, shown as a business review queue before it becomes operational work in PATS" />
-      <Toolbar placeholder="Search source, broker, ticker, private asset, intake result, or received time...">
+      <PageTitle title="Inbound Blotter" subtitle="Trades received from Vantage and what PATS decided for each one" />
+      <Toolbar placeholder="Search source, broker, ticker, private asset, PATS result, or received time...">
         <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
       </Toolbar>
       <ShellCard className="overflow-hidden">
-        <TableHeader columns={["Source", "Broker", "Incoming ticker", "Matched asset", "Intake result", "Next action", "Received"]} />
+        <TableHeader columns={["Source", "Broker", "Ticker received", "Matched asset", "PATS result", "Next action", "Received"]} />
         <div className="divide-y divide-slate-800/80">
           {externalTrades.map((item) => (
             <button key={item.externalId} onClick={() => openItem(item.externalId)} className="grid w-full grid-cols-7 items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
@@ -1381,7 +1381,7 @@ function ExternalTradeDetails({ id, onClose }: { id: string; onClose: () => void
           <Info label="Broker" value={item.broker} />
           <Info label="Ticker" value={item.ticker} />
           <Info label="Private asset" value={item.asset} />
-          <Info label="Resolution" value={displayLabel(item.validation)} />
+          <Info label="PATS result" value={displayLabel(item.validation)} />
           <Info label="Workflow result" value={displayLabel(item.execution)} />
         </div>
       </ShellCard>
