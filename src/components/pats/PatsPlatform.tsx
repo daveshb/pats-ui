@@ -1174,10 +1174,6 @@ function CreateWorkflowTemplatePanel({ onClose }: { onClose: () => void }) {
               </select>
             </FormField>
           </div>
-          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
-            <p className="text-xs font-semibold text-slate-100">Backend fields used</p>
-            <p className="mt-1 text-xs text-slate-500">patsBrokerProfileId, privateAssetId, name, description, completionPolicy.</p>
-          </div>
         </ShellCard>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1236,10 +1232,6 @@ function AddWorkflowRequirementPanel({ workflow, onClose }: { workflow: typeof w
               <input className={compactInputClass} placeholder="What Ops must complete before the trade moves forward" />
             </FormField>
           </div>
-          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
-            <p className="text-xs font-semibold text-slate-100">Backend fields used</p>
-            <p className="mt-1 text-xs text-slate-500">workflowTemplateId from the selected template, plus type, title, description, required, and sortOrder.</p>
-          </div>
         </ShellCard>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1251,7 +1243,7 @@ function AddWorkflowRequirementPanel({ workflow, onClose }: { workflow: typeof w
   );
 }
 
-function Documents() {
+function DocumentsLegacy() {
   return (
     <>
       <PageTitle title="Documents" subtitle="Mocked document records derived from workflow requirements; the real Documents module is the next backend step" />
@@ -1309,6 +1301,123 @@ function Documents() {
             <Info label="First source" value="Manual Ops upload" />
           </div>
         </ShellCard>
+      </div>
+    </>
+  );
+}
+
+function documentNextAction(doc: typeof documents[number]) {
+  if (doc.status === "pending") return doc.platform === "Manual Upload" ? "Upload document" : "Send for signature";
+  if (doc.status === "sent") return "Wait for signature";
+  if (doc.status === "signed") return "Complete step";
+  if (doc.status === "completed") return "No action";
+  if (doc.status === "blocked") return "Fix document issue";
+  return "Review";
+}
+
+function Documents() {
+  const [selectedDocumentId, setSelectedDocumentId] = useState(documents[0]?.documentId ?? "");
+  const selectedDocument = documents.find((doc) => doc.documentId === selectedDocumentId) ?? documents[0];
+  const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument.tradeId);
+  const documentFlow = [
+    ["Required", "Workflow step needs this document"],
+    ["Prepared", selectedDocument.platform === "Manual Upload" ? "Ops uploads the file" : "Envelope or platform task is created"],
+    ["Signed / uploaded", "Investor, broker, or Ops completes the document"],
+    ["Completed", "The related workflow step can be completed"],
+  ];
+  const activeStep = selectedDocument.status === "completed" ? 4 : selectedDocument.status === "signed" ? 3 : selectedDocument.status === "sent" ? 2 : 1;
+
+  return (
+    <>
+      <PageTitle title="Documents" subtitle="Documents and signatures required by workflows before a trade can continue" />
+      <Toolbar placeholder="Search document, broker, private asset, platform, status, or next action..." />
+      <div className="grid grid-cols-[1.25fr_0.95fr] gap-5">
+        <ShellCard className="overflow-hidden">
+          <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+            <h2 className="text-sm font-semibold text-slate-100">Document work</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Each item is tied to a workflow step for a broker-owned private asset.</p>
+          </div>
+          <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.65fr_0.9fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+            <span>Document</span>
+            <span>Asset / broker</span>
+            <span>Platform</span>
+            <span>Status</span>
+            <span>Next action</span>
+          </div>
+          <div className="divide-y divide-slate-800/80">
+            {documents.map((doc) => {
+              const isSelected = doc.documentId === selectedDocument.documentId;
+              return (
+                <button
+                  key={doc.documentId}
+                  onClick={() => setSelectedDocumentId(doc.documentId)}
+                  className={`grid w-full grid-cols-[1.2fr_1fr_0.7fr_0.65fr_0.9fr] items-center px-5 py-4 text-left text-sm transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
+                >
+                  <span>
+                    <span className="block font-semibold text-slate-100">{doc.name}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">{doc.due === "Overdue" ? "Overdue" : `Due ${doc.due}`}</span>
+                  </span>
+                  <span>
+                    <span className="block text-xs font-semibold text-slate-300">{doc.asset}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">{doc.broker}</span>
+                  </span>
+                  <span className="text-xs text-slate-300">{doc.platform}</span>
+                  <span><StatusBadge value={doc.status} /></span>
+                  <span className="text-xs font-semibold text-sky-300">{documentNextAction(doc)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </ShellCard>
+
+        <div className="space-y-5">
+          <ShellCard className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{selectedDocument.name}</h2>
+                <p className="mt-1 text-xs text-slate-500">{selectedDocument.asset} - {selectedDocument.broker}</p>
+              </div>
+              <StatusBadge value={selectedDocument.status} />
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              <Info label="Platform" value={selectedDocument.platform} />
+              <Info label="Due" value={selectedDocument.due} />
+              <Info label="Related trade" value={relatedTrade ? `${relatedTrade.ticker} - ${tradeInvestorLabel(relatedTrade)}` : "Not assigned"} />
+              <Info label="Next action" value={documentNextAction(selectedDocument)} />
+            </div>
+            <div className="mt-4 rounded-md border border-slate-800 bg-[#101318] p-3 text-xs text-slate-400">
+              {selectedDocument.callback}
+            </div>
+          </ShellCard>
+
+          <ShellCard className="p-5">
+            <h2 className="text-sm font-semibold text-white">Document progress</h2>
+            <div className="mt-4 space-y-3">
+              {documentFlow.map(([title, description], index) => {
+                const isDone = index + 1 <= activeStep && selectedDocument.status !== "blocked";
+                const isBlocked = selectedDocument.status === "blocked" && index === 1;
+                return (
+                  <div key={title} className={`grid grid-cols-[24px_1fr] gap-3 rounded-md border p-3 ${isBlocked ? "border-rose-400/25 bg-rose-400/10" : isDone ? "border-emerald-400/20 bg-emerald-400/10" : "border-slate-800 bg-slate-950/35"}`}>
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold ${isBlocked ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : isDone ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300" : "border-slate-700 bg-slate-900 text-slate-500"}`}>{index + 1}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-100">{title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ShellCard>
+
+          <ShellCard className="p-5">
+            <h2 className="text-sm font-semibold text-white">Backend direction</h2>
+            <p className="mt-2 text-xs leading-5 text-slate-500">The first version should support manual Ops upload. DocuSign and iCapital can be added later behind the same document status flow.</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Upload document</button>
+              <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Mark complete</button>
+            </div>
+          </ShellCard>
+        </div>
       </div>
     </>
   );
