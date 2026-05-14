@@ -997,6 +997,7 @@ function WorkflowsLegacy() {
 
 function Workflows() {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(workflows[0]?.id ?? "");
+  const [workflowPanel, setWorkflowPanel] = useState<"template" | "requirement" | null>(null);
   const selectedWorkflow = workflows.find((flow) => flow.id === selectedWorkflowId) ?? workflows[0];
   const selectedAsset = assets.find((asset) => asset.privateAssetId === selectedWorkflow.privateAssetId);
   const selectedRequirements = selectedWorkflow.requirementTypes.map((type, index) => ({
@@ -1014,8 +1015,8 @@ function Workflows() {
         subtitle="Rules for each private asset that decide if a trade can move forward or needs steps first"
         action={
           <div className="flex gap-2">
-            <button className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
-            <button className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
+            <button onClick={() => setWorkflowPanel("requirement")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
+            <button onClick={() => setWorkflowPanel("template")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
           </div>
         }
       />
@@ -1130,7 +1131,123 @@ function Workflows() {
           </ShellCard>
         </div>
       </div>
+      {workflowPanel === "template" && <CreateWorkflowTemplatePanel onClose={() => setWorkflowPanel(null)} />}
+      {workflowPanel === "requirement" && <AddWorkflowRequirementPanel workflow={selectedWorkflow} onClose={() => setWorkflowPanel(null)} />}
     </>
+  );
+}
+
+function CreateWorkflowTemplatePanel({ onClose }: { onClose: () => void }) {
+  return (
+    <DetailPanel title="Create Workflow Template" subtitle="Define the workflow rules for one broker-owned private asset" onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Template owner</h3>
+          <p className="mt-1 text-xs text-slate-500">A workflow template must belong to one broker and one private asset.</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="Broker">
+              <select className={compactInputClass}>
+                {brokers.filter((broker) => broker.status === "Active").map((broker) => <option key={broker.patsBrokerProfileId}>{broker.name}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Private asset">
+              <select className={compactInputClass}>
+                {assets.map((asset) => <option key={asset.privateAssetId}>{asset.name}</option>)}
+              </select>
+            </FormField>
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Workflow rule</h3>
+          <div className="mt-4 space-y-3">
+            <FormField label="Template name">
+              <input className={compactInputClass} placeholder="Subscription workflow" />
+            </FormField>
+            <FormField label="Description">
+              <input className={compactInputClass} placeholder="Required documents and approvals before trading" />
+            </FormField>
+            <FormField label="When should this workflow apply?">
+              <select className={compactInputClass}>
+                <option value="once_per_user">Once per user or account</option>
+                <option value="every_trade">Every trade</option>
+              </select>
+            </FormField>
+          </div>
+          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
+            <p className="text-xs font-semibold text-slate-100">Backend fields used</p>
+            <p className="mt-1 text-xs text-slate-500">patsBrokerProfileId, privateAssetId, name, description, completionPolicy.</p>
+          </div>
+        </ShellCard>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Create Template</button>
+        </div>
+      </div>
+    </DetailPanel>
+  );
+}
+
+function AddWorkflowRequirementPanel({ workflow, onClose }: { workflow: typeof workflows[number]; onClose: () => void }) {
+  return (
+    <DetailPanel title="Add Requirement" subtitle={`Add a step to ${workflow.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Selected template</h3>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <Info label="Template" value={workflow.name} />
+            <Info label="Private asset" value={workflow.asset} />
+            <Info label="Broker" value={workflow.broker} />
+            <Info label="Policy" value={displayLabel(workflow.policy)} />
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Requirement details</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="Type">
+              <select className={compactInputClass}>
+                <option value="document">Document</option>
+                <option value="signature">Signature</option>
+                <option value="approval">Approval</option>
+                <option value="liquidity_check">Liquidity check</option>
+                <option value="lockup_check">Lock-up check</option>
+                <option value="notice_period_check">Notice period check</option>
+                <option value="manual_review">Manual review</option>
+                <option value="external_platform">External platform</option>
+              </select>
+            </FormField>
+            <FormField label="Order">
+              <input className={compactInputClass} placeholder="1" />
+            </FormField>
+            <FormField label="Title">
+              <input className={compactInputClass} placeholder="Subscription agreement" />
+            </FormField>
+            <FormField label="Required">
+              <select className={compactInputClass}>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </FormField>
+          </div>
+          <div className="mt-3">
+            <FormField label="Description">
+              <input className={compactInputClass} placeholder="What Ops must complete before the trade moves forward" />
+            </FormField>
+          </div>
+          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
+            <p className="text-xs font-semibold text-slate-100">Backend fields used</p>
+            <p className="mt-1 text-xs text-slate-500">workflowTemplateId from the selected template, plus type, title, description, required, and sortOrder.</p>
+          </div>
+        </ShellCard>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Requirement</button>
+        </div>
+      </div>
+    </DetailPanel>
   );
 }
 
