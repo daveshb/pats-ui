@@ -249,7 +249,7 @@ const alerts = [
   { severity: "Low", entity: "pbp_legacy", issue: "Broker profile is disconnected", status: "Open", owner: "Integrations", created: "3 hours ago" },
 ];
 
-const tradeGridClass = "grid-cols-[1.05fr_1.2fr_1.35fr_0.9fr_0.85fr_0.9fr_1fr_0.7fr]";
+const tradeGridClass = "grid-cols-[1.15fr_1.2fr_1.25fr_1.25fr_0.8fr_0.95fr_1fr]";
 
 function toneFor(value: string): StatusTone {
   const lower = value.toLowerCase().replaceAll("_", " ");
@@ -275,6 +275,19 @@ function badgeClasses(tone: StatusTone) {
 
 function displayLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function tradeNextAction(trade: Trade) {
+  if (trade.status === "validated") return "Ready for execution";
+  if (trade.status === "workflow_required") return "Complete workflow";
+  if (trade.status === "unresolved") return "Map broker ticker";
+  return "Ops review";
+}
+
+function tradeInvestorLabel(trade: Trade) {
+  const user = trade.userId?.replace("user-", "User ") ?? "Unknown user";
+  const account = trade.accountId?.replace("acct-", "Account ") ?? "Unknown account";
+  return `${user} / ${account}`;
 }
 
 function StatusBadge({ value, tone }: { value: string; tone?: StatusTone }) {
@@ -618,19 +631,18 @@ function TradeRow({ trade, compact = false, onClick }: { trade: Trade; compact?:
       ) : (
         <>
           <span>
-            <span className="block text-sm font-semibold text-slate-100">{trade.vantageTradeId.replace("vt_", "Vantage ")}</span>
+            <span className="block text-sm font-semibold text-slate-100">{trade.type} {trade.quantity !== "-" ? trade.quantity : trade.amount}</span>
             <span className="mt-0.5 block text-[11px] text-slate-500">Received {trade.time}</span>
           </span>
           <span className="text-slate-300">{trade.broker}</span>
+          <span className="text-xs text-slate-400">{tradeInvestorLabel(trade)}</span>
           <span>
             <span className="block font-semibold text-slate-100">{trade.asset}</span>
             <span className="mt-0.5 block text-[11px] text-sky-300">{trade.ticker}</span>
           </span>
-          <span><StatusBadge value={trade.type} /></span>
-          <span className="text-xs text-slate-400">{trade.quantity !== "-" ? trade.quantity : trade.amount}</span>
           <span><StatusBadge value={trade.status} /></span>
           <span><StatusBadge value={trade.workflowReason} /></span>
-          <span className="text-right text-xs text-slate-500">{trade.workflowRequired ? "Ops action" : "Can advance"}</span>
+          <span className="text-xs font-semibold text-sky-300">{tradeNextAction(trade)}</span>
         </>
       )}
     </button>
@@ -642,7 +654,7 @@ function Trades({ openNewTrade, openTrade }: { openNewTrade: () => void; openTra
     <>
       <PageTitle
         title="PATS Trade Blotter"
-        subtitle="Business view of Vantage trades, private asset resolution, workflow decision, and next action"
+        subtitle="Normalized operations view after PATS has resolved the trade and decided what needs to happen next"
         action={<button onClick={openNewTrade} className="flex h-10 items-center gap-2 rounded-lg bg-sky-500 px-4 text-sm font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-4 w-4" />New Manual Trade</button>}
       />
       <Toolbar placeholder="Search trade, ticker, broker, private asset, investor, or workflow status...">
@@ -673,12 +685,11 @@ function TradeTableHeader() {
     <div className={`grid ${tradeGridClass} border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600`}>
       <span>Trade</span>
       <span>Broker</span>
+      <span>Investor / account</span>
       <span>Private asset</span>
-      <span>Type</span>
-      <span>Size</span>
       <span>Status</span>
-      <span>Workflow decision</span>
-      <span className="text-right">Next step</span>
+      <span>Workflow</span>
+      <span>Next action</span>
     </div>
   );
 }
@@ -686,21 +697,21 @@ function TradeTableHeader() {
 function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
   return (
     <>
-      <PageTitle title="Inbound Blotter Trades" subtitle="What came from Vantage, what PATS resolved, and what the operations team needs to do next" />
-      <Toolbar placeholder="Search by trade, broker, ticker, private asset, status, or reason...">
+      <PageTitle title="Inbound Blotter" subtitle="Raw trade intake from Vantage, shown as a business review queue before it becomes operational work in PATS" />
+      <Toolbar placeholder="Search source, broker, ticker, private asset, intake result, or received time...">
         <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
       </Toolbar>
       <ShellCard className="overflow-hidden">
-        <TableHeader columns={["Source", "Broker", "Ticker", "Private Asset", "Resolution", "Workflow", "Reason", "Received"]} />
+        <TableHeader columns={["Source", "Broker", "Incoming ticker", "Matched asset", "Intake result", "Next action", "Received"]} />
         <div className="divide-y divide-slate-800/80">
           {externalTrades.map((item) => (
-            <button key={item.externalId} onClick={() => openItem(item.externalId)} className="grid w-full grid-cols-8 items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
+            <button key={item.externalId} onClick={() => openItem(item.externalId)} className="grid w-full grid-cols-7 items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
               <span className="text-xs font-medium text-sky-300">Vantage</span>
               <span className="text-xs text-slate-300">{item.broker}</span>
               <span className="text-sm font-semibold text-slate-100">{item.ticker}</span>
               <span className="text-xs text-slate-300">{item.asset}</span>
               <span><StatusBadge value={item.validation} /></span>
-              <span><StatusBadge value={item.execution} /></span>
+              <span className="text-xs font-semibold text-sky-300">{item.validation === "validated" ? "Move to blotter" : item.validation === "workflow_required" ? "Start workflow" : "Ops review"}</span>
               <span className="text-xs text-slate-500">{item.received}</span>
             </button>
           ))}
@@ -1257,7 +1268,7 @@ function TradeDetails({ trade, onClose }: { trade: Trade; onClose: () => void })
           <Info label="Broker" value={trade.broker} />
           <Info label="Private asset" value={trade.asset} />
           <Info label="Ticker" value={trade.ticker} />
-          <Info label="Order type" value={trade.type} />
+          <Info label="Side / action" value={trade.type} />
           <Info label="Quantity" value={trade.quantity} />
           <Info label="Amount" value={trade.amount} />
           <Info label="Investor / account" value={`${trade.userId?.replace("user-", "User ") ?? "Unknown"} / ${trade.accountId?.replace("acct-", "Account ") ?? "Unknown"}`} />
@@ -1382,7 +1393,9 @@ function ExternalTradeDetails({ id, onClose }: { id: string; onClose: () => void
         <h3 className="text-sm font-semibold text-white">Recommended action</h3>
         <p className="mt-3 text-sm text-slate-300">
           {item.validation === "validated"
-            ? "This trade can continue because PATS did not find any blocking workflow requirement."
+            ? item.execution === "already_eligible"
+              ? "This trade can continue because the user or account already completed the private asset requirements."
+              : "This trade can continue because PATS did not find any blocking workflow requirement."
             : item.validation === "workflow_required"
               ? "Operations should open the workflow checklist and complete the required steps before this trade continues."
               : "Operations should review the broker ticker mapping or asset configuration before this trade continues."}
@@ -1402,7 +1415,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 }
 
 const compactInputClass = "h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60";
-const compactTextareaClass = "h-20 w-full resize-none rounded-md border border-slate-800 bg-[#11151b] p-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60";
 
 function NewTradePanel({ onClose }: { onClose: () => void }) {
   return (
@@ -1411,7 +1423,7 @@ function NewTradePanel({ onClose }: { onClose: () => void }) {
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Trade context</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            {["Broker", "Broker-scoped ticker", "Linked private asset", "Route"].map((label) => (
+            {["Broker", "Broker ticker", "Linked private asset"].map((label) => (
               <FormField key={label} label={label}>
                 <select className={compactInputClass}>
                   <option>Select {label.toLowerCase()}</option>
@@ -1446,22 +1458,14 @@ function NewTradePanel({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3">
             <FormField label="Quantity or amount">
               <input className={compactInputClass} placeholder="10,000 or $500,000" />
             </FormField>
-            <FormField label="Order type">
-              <select className={compactInputClass}>
-                <option>Market</option>
-                <option>Limit</option>
-                <option>Manual review</option>
-              </select>
-            </FormField>
           </div>
-          <div className="mt-3">
-            <FormField label="Allocation instructions">
-              <textarea className={compactTextareaClass} placeholder="Optional notes" />
-            </FormField>
+          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
+            <p className="text-xs font-semibold text-slate-100">PATS will run the same checks used for Vantage inbound trades.</p>
+            <p className="mt-1 text-xs text-slate-500">Broker ticker match, private asset ownership, workflow policy, and eligibility decide the next operational status.</p>
           </div>
         </ShellCard>
 
