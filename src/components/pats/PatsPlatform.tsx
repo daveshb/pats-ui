@@ -435,23 +435,25 @@ function PageTitle({ title, subtitle, action }: { title: string; subtitle: strin
 
 function BlotterLifecycleStrip() {
   const steps = [
-    ["1", "Inbound trade", "POST /inbound-trades"],
-    ["2", "Ticker resolution", "Broker ticker match"],
-    ["3", "Private asset", "broker-scoped ticker match"],
-    ["4", "Workflow decision", "template + completionPolicy"],
-    ["5", "Eligibility", "skip or require steps"],
+    ["1", "Trade from Vantage", "External order arrives"],
+    ["2", "PATS intake", "Validate and store"],
+    ["3", "Asset resolution", "Broker ticker match"],
+    ["4", "Workflow decision", "Rules and eligibility"],
+    ["5", "Ops workflow", "Documents and approvals"],
+    ["6", "Execution", "Future fill process"],
+    ["7", "Return to Vantage", "Status or fill update"],
   ];
 
   return (
     <ShellCard className="mb-5 p-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">Operational lifecycle</h2>
-          <p className="mt-0.5 text-[11px] text-slate-500">Mocked UI, aligned to the backend entities and decisions persisted by PATS.</p>
+          <h2 className="text-sm font-semibold text-slate-100">End-to-end operating lifecycle</h2>
+          <p className="mt-0.5 text-[11px] text-slate-500">Final product flow from Vantage intake to workflow completion, execution, and return back to Vantage.</p>
         </div>
-        <StatusBadge value="backend aligned mock" tone="green" />
+        <StatusBadge value="final flow design" tone="blue" />
       </div>
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-7 gap-2">
         {steps.map(([number, title, caption], index) => (
           <div key={title} className="relative rounded-md border border-slate-800 bg-slate-950/35 p-3">
             {index < steps.length - 1 && <span className="absolute left-[calc(100%+2px)] top-1/2 h-px w-2 -translate-y-1/2 bg-sky-400/25" />}
@@ -468,60 +470,104 @@ function BlotterLifecycleStrip() {
 }
 
 function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
+  const activeBrokerCount = brokers.filter((broker) => broker.status === "Active").length;
+  const workflowRequiredCount = trades.filter((trade) => trade.status === "workflow_required").length;
+  const readyCount = trades.filter((trade) => trade.status === "validated").length;
+  const exceptionCount = trades.filter((trade) => trade.status === "unresolved" || trade.status === "needs_review").length;
+  const queueRows = trades.slice(0, 4).map((trade) => ({
+    broker: trade.broker,
+    asset: trade.asset,
+    ticker: trade.ticker,
+    size: trade.quantity !== "-" ? trade.quantity : trade.amount,
+    status: trade.status,
+    nextAction:
+      trade.status === "validated"
+        ? "Ready for execution"
+        : trade.status === "workflow_required"
+          ? "Complete workflow"
+          : trade.status === "unresolved"
+            ? "Create ticker mapping"
+            : "Ops review",
+  }));
+
   return (
     <>
       <PageTitle title="Operations Dashboard" subtitle="Private asset operating layer for broker-owned assets, workflow rules, and Vantage trade intake" />
       <BlotterLifecycleStrip />
       <div className="grid grid-cols-4 gap-4">
-        <MetricCard label="Active broker profiles" value="5" delta="pbp_" />
-        <MetricCard label="Private assets" value="4" delta="pa_" />
-        <MetricCard label="Scoped tickers" value="4" delta="bst_" />
-        <MetricCard label="Workflow required" value="2" delta="it_" />
+        <MetricCard label="Active brokers" value={activeBrokerCount.toString()} delta="synced" />
+        <MetricCard label="Private assets" value={assets.length.toString()} delta="catalogued" />
+        <MetricCard label="Trades ready" value={readyCount.toString()} delta="can advance" />
+        <MetricCard label="Needs action" value={(workflowRequiredCount + exceptionCount).toString()} delta="ops queue" />
       </div>
       <div className="mt-5 grid grid-cols-[2fr_1fr] gap-5">
         <ShellCard className="p-5">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">Inbound trade decision preview</h2>
-              <p className="mt-1 text-xs text-slate-500">Business view of resolution, workflow, eligibility, and next action</p>
+              <h2 className="text-base font-semibold text-white">Trade intake queue</h2>
+              <p className="mt-1 text-xs text-slate-500">Aggregated operating view from inbound trades, asset resolution, workflow rules, and eligibility.</p>
             </div>
             <button onClick={() => onSelect("externalTrades")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">
               View All <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="space-y-2">
-            {externalTrades.slice(0, 4).map((trade) => (
-              <button key={trade.externalId} onClick={() => onSelect("externalTrades")} className="grid w-full grid-cols-[1.2fr_0.65fr_1fr_0.85fr_0.75fr] items-center rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-left text-xs transition hover:bg-slate-800/40">
+            {queueRows.map((trade) => (
+              <button key={`${trade.broker}-${trade.ticker}-${trade.status}`} onClick={() => onSelect("externalTrades")} className="grid w-full grid-cols-[1.15fr_1fr_0.55fr_0.7fr_0.85fr_0.95fr] items-center rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-left text-xs transition hover:bg-slate-800/40">
                 <span className="text-slate-300">{trade.broker}</span>
-                <span className="font-semibold text-slate-100">{trade.ticker}</span>
                 <span className="text-slate-400">{trade.asset}</span>
-                <StatusBadge value={trade.validation} />
-                <StatusBadge value={trade.execution} />
+                <span className="font-semibold text-slate-100">{trade.ticker}</span>
+                <span className="text-slate-400">{trade.size}</span>
+                <StatusBadge value={trade.status} />
+                <span className="font-semibold text-sky-300">{trade.nextAction}</span>
               </button>
             ))}
           </div>
         </ShellCard>
         <ShellCard className="p-5">
-          <h2 className="text-base font-semibold text-white">Broker-owned asset coverage</h2>
-          <p className="mt-1 text-xs text-slate-500">Brokers own the private assets, tickers, and workflow requirements in PATS</p>
+          <h2 className="text-base font-semibold text-white">Broker coverage</h2>
+          <p className="mt-1 text-xs text-slate-500">Derived from broker profiles, private assets, scoped tickers, and workflow templates.</p>
           <div className="mt-4 divide-y divide-slate-800">
-            {brokers.slice(0, 4).map((broker) => (
-              <div key={broker.name} className="grid grid-cols-[1fr_auto] gap-4 py-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 rounded-full ${broker.status === "Active" ? "bg-emerald-400" : "bg-slate-500"}`} />
-                    <span className="text-sm font-semibold text-white">{broker.name}</span>
+            {brokers.slice(0, 4).map((broker) => {
+              const brokerAssets = assets.filter((asset) => asset.broker === broker.name);
+              const brokerWorkflows = workflows.filter((workflow) => workflow.broker === broker.name);
+              return (
+                <div key={broker.name} className="grid grid-cols-[1fr_auto] gap-4 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`h-1.5 w-1.5 rounded-full ${broker.status === "Active" ? "bg-emerald-400" : "bg-slate-500"}`} />
+                      <span className="text-sm font-semibold text-white">{broker.name}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">{broker.workflowOwner}</p>
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">{broker.workflowOwner}</p>
+                  <div className="grid grid-cols-3 gap-4 text-right">
+                    <div><p className="text-[8px] text-slate-600">Assets</p><p className="mt-1 text-sm font-semibold text-white">{brokerAssets.length}</p></div>
+                    <div><p className="text-[8px] text-slate-600">Tickers</p><p className="mt-1 text-sm font-semibold text-white">{brokerAssets.length}</p></div>
+                    <div><p className="text-[8px] text-slate-600">Workflows</p><p className="mt-1 text-sm font-semibold text-white">{brokerWorkflows.length}</p></div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-5 text-right">
-                  <div><p className="text-[8px] text-slate-600">Assets</p><p className="mt-1 text-sm font-semibold text-white">{broker.listedAssets}</p></div>
-                  <div><p className="text-[8px] text-slate-600">Tickers</p><p className="mt-1 text-sm font-semibold text-white">{assets.filter((asset) => asset.broker === broker.name).length}</p></div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </ShellCard>
+      </div>
+      <div className="mt-5 grid grid-cols-3 gap-4">
+        {[
+          ["Workflow follow-up", `${workflowRequiredCount} trades need required steps`, "Documents, signatures, approvals, or manual review must be completed before these trades continue.", "workflow_required"],
+          ["Eligibility leverage", `${readyCount} trades can advance`, "These trades either have no template or the user/account already completed the private asset workflow.", "already_eligible"],
+          ["Resolution exceptions", `${exceptionCount} trades need review`, "Ops should fix ticker mappings or review restricted asset conditions before the trade moves forward.", "needs_review"],
+        ].map(([title, value, detail, status]) => (
+          <ShellCard key={title} className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-white">{title}</h2>
+                <p className="mt-1 text-xs font-semibold text-slate-300">{value}</p>
+              </div>
+              <StatusBadge value={status} />
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-500">{detail}</p>
+          </ShellCard>
+        ))}
       </div>
       <ShellCard className="mt-5 p-5">
         <div className="mb-4 flex items-center justify-between">
