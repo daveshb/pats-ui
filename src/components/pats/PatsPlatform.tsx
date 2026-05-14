@@ -726,55 +726,62 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
 
   return (
     <>
-      <PageTitle title="Asset Brokers" subtitle="PATS broker profiles mirror Vantage brokers and add operational config for private assets" action={<button onClick={openNewBroker} className="flex h-9 items-center gap-2 rounded-md bg-sky-500 px-3.5 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Enable Broker Owner</button>} />
-      <Toolbar placeholder="Search broker, ticker, workflow owner, fill method, or contact..." />
+      <PageTitle title="Asset Brokers" subtitle="Brokers from Vantage with the PATS settings needed for private asset trades" action={<button onClick={openNewBroker} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Enable Broker</button>} />
+      <Toolbar placeholder="Search broker, workflow owner, fill return, asset, or ticker..." />
       <ShellCard className="overflow-hidden">
-        <div className="grid grid-cols-[1.45fr_0.65fr_0.75fr_1.25fr_1fr_0.75fr_0.75fr_0.6fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
-          <span>Private broker</span>
-          <span>Code</span>
+        <div className="grid grid-cols-[1.55fr_0.7fr_1fr_1.05fr_0.55fr_0.55fr_0.55fr_0.35fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
+          <span>Broker</span>
           <span>Status</span>
-          <span>Owns in PATS</span>
           <span>Workflow owner</span>
-          <span className="text-right">Inbound</span>
+          <span>Fill return</span>
           <span className="text-right">Assets</span>
+          <span className="text-right">Tickers</span>
+          <span className="text-right">Trades</span>
           <span />
         </div>
         <div className="divide-y divide-slate-800/90">
           {brokers.map((broker) => {
             const isOpen = expandedBroker === broker.name;
             const brokerAssets = assets.filter((asset) => asset.broker === broker.name);
+            const brokerWorkflows = workflows.filter((workflow) => workflow.broker === broker.name);
 
             return (
               <div key={broker.name}>
                 <button
                   onClick={() => setExpandedBroker(isOpen ? null : broker.name)}
-                  className="grid w-full grid-cols-[1.45fr_0.65fr_0.75fr_1.25fr_1fr_0.75fr_0.75fr_0.6fr] items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65"
+                  className="grid w-full grid-cols-[1.55fr_0.7fr_1fr_1.05fr_0.55fr_0.55fr_0.55fr_0.35fr] items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65"
                 >
                   <span className="flex items-center gap-2.5">
                     <span className={`h-1.5 w-1.5 rounded-full ${broker.status === "Active" ? "bg-emerald-400" : "bg-slate-500"}`} />
-                    <span className="font-semibold text-slate-100">{broker.name}</span>
+                    <span>
+                      <span className="block font-semibold text-slate-100">{broker.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">{broker.code}</span>
+                    </span>
                   </span>
-                  <span className="text-xs text-slate-500">{broker.code}</span>
                   <span><StatusBadge value={broker.status} /></span>
-                  <span className="text-xs text-slate-400">{broker.role}</span>
                   <span className="text-xs text-slate-400">{broker.workflowOwner}</span>
+                  <span className="text-xs text-slate-400">{broker.fillReturn}</span>
+                  <span className="text-right text-sm font-semibold text-slate-100">{brokerAssets.length}</span>
+                  <span className="text-right text-sm font-semibold text-slate-100">{brokerAssets.length}</span>
                   <span className="text-right text-sm font-semibold text-slate-100">{broker.inboundTrades}</span>
-                  <span className="text-right text-sm font-semibold text-slate-100">{broker.listedAssets}</span>
                   <span className="flex justify-end text-slate-500"><ChevronDown className={`h-4 w-4 transition ${isOpen ? "rotate-180 text-sky-300" : ""}`} /></span>
                 </button>
                 {isOpen && (
                   <div className="border-t border-slate-800 bg-slate-950/35 px-5 py-4">
-                    <div className="grid grid-cols-[0.9fr_1.2fr_1fr] gap-5">
-                      <div className="grid grid-cols-2 gap-4">
-                        <Info label="Broker setup" value="Synced from Vantage" />
-                        <Info label="PATS status" value={broker.status} />
-                        <Info label="Listed assets" value={broker.listedAssets.toString()} />
-                        <Info label="Default route" value={broker.defaultRoute} />
-                        <Info label="Fill return" value={broker.fillReturn} />
-                        <Info label="Workflow owner" value={broker.workflowOwner} />
+                    <div className="grid grid-cols-[0.9fr_1.3fr_1fr] gap-5">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-300">Broker setup</p>
+                        <div className="mt-3 grid grid-cols-2 gap-4">
+                          <Info label="Source" value="Vantage" />
+                          <Info label="PATS status" value={broker.status} />
+                          <Info label="Assets" value={brokerAssets.length.toString()} />
+                          <Info label="Workflow rules" value={brokerWorkflows.length.toString()} />
+                          <Info label="Workflow owner" value={broker.workflowOwner} />
+                          <Info label="Fill return" value={broker.fillReturn} />
+                        </div>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-slate-300">Broker-scoped tickers</p>
+                        <p className="text-xs font-semibold text-slate-300">Broker tickers</p>
                         <p className="mt-1 text-[11px] text-slate-500">These symbols only have meaning inside this broker relationship.</p>
                         <div className="mt-2 space-y-2">
                           {brokerAssets.length > 0 ? brokerAssets.map((asset) => (
@@ -787,12 +794,11 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
                         </div>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-slate-300">Workflow rules, documents, and confirmation</p>
+                        <p className="text-xs font-semibold text-slate-300">Operations notes</p>
                         <div className="mt-2 space-y-1.5 text-xs text-slate-400">
-                          {broker.contacts.map((contact) => <p key={contact}>{contact}</p>)}
-                          <p>Systems: {broker.systems.join(", ")}</p>
-                          <p>Requirements: documents, signatures, approvals</p>
-                          <p>Confirmation: {broker.fillReturn}</p>
+                          <p>Private assets must belong to this broker before tickers or workflows can be created.</p>
+                          <p>Workflow owner decides who completes documents, signatures, approvals, or manual review.</p>
+                          <p>Fill return controls how completed execution results go back to Vantage.</p>
                         </div>
                       </div>
                     </div>
@@ -1483,11 +1489,11 @@ function NewTradePanel({ onClose }: { onClose: () => void }) {
 
 function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
   return (
-    <DetailPanel title="Enable Broker Owner" subtitle="Select an existing Vantage broker and configure its PATS private asset owner profile" onClose={onClose}>
+    <DetailPanel title="Enable Broker" subtitle="Select a Vantage broker and set the PATS rules used for private asset trades" onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
-          <h3 className="text-sm font-semibold text-white">Vantage broker reference</h3>
-          <p className="mt-1 text-xs text-slate-500">PATS extends the Vantage broker with private asset ownership, scoped tickers, and workflow rules.</p>
+          <h3 className="text-sm font-semibold text-white">Broker from Vantage</h3>
+          <p className="mt-1 text-xs text-slate-500">PATS keeps the Vantage broker as the source and adds private asset rules on top.</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Vantage broker">
               <select className={compactInputClass}>
@@ -1496,12 +1502,6 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
                 <option>JP Morgan Private Markets</option>
                 <option>Schwab Alternative Investments</option>
               </select>
-            </FormField>
-            <FormField label="Vantage broker ID">
-              <input className={compactInputClass} placeholder="broker#vantage-id" />
-            </FormField>
-            <FormField label="PATS private broker code">
-              <input className={compactInputClass} placeholder="GSAS" />
             </FormField>
             <FormField label="PATS status">
               <select className={compactInputClass}>
@@ -1514,16 +1514,8 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
         </ShellCard>
 
         <ShellCard className="p-4">
-          <h3 className="text-sm font-semibold text-white">PATS owner configuration</h3>
+          <h3 className="text-sm font-semibold text-white">PATS settings</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <FormField label="Private asset route">
-              <select className={compactInputClass}>
-                <option>Private Broker API</option>
-                <option>iCapital Workflow</option>
-                <option>DocuSign + Manual Review</option>
-                <option>Manual review</option>
-              </select>
-            </FormField>
             <FormField label="Workflow owner">
               <select className={compactInputClass}>
                 <option>Broker + PATS Ops</option>
@@ -1540,21 +1532,14 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
                 <option>Workflow completion event</option>
               </select>
             </FormField>
-            <FormField label="Operational contact">
-              <input className={compactInputClass} placeholder="private-assets-ops@example.com" />
-            </FormField>
           </div>
-          <div className="mt-4">
-            <span className="text-xs font-semibold text-slate-300">PATS capabilities</span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {["Broker tickers", "Document workflow", "Signature tracking", "Fill return"].map((system, index) => (
-                <button key={system} className={`h-7 rounded-md border px-2.5 text-xs font-semibold ${index < 2 ? "border-sky-400/25 bg-sky-400/10 text-sky-300" : "border-slate-700 bg-slate-900 text-slate-400"}`}>{system}</button>
-              ))}
-            </div>
+          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
+            <p className="text-xs font-semibold text-slate-100">Private assets, broker tickers, and workflow templates are configured after the broker is enabled.</p>
+            <p className="mt-1 text-xs text-slate-500">This keeps broker setup focused and avoids mixing broker configuration with asset setup.</p>
           </div>
         </ShellCard>
 
-        <ShellCard className="p-4">
+        <ShellCard className="hidden p-4">
           <h3 className="text-sm font-semibold text-white">Initial broker-scoped ticker</h3>
           <p className="mt-1 text-xs text-slate-500">Optional setup to show the Broker → Ticker → Private Asset relationship.</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1572,7 +1557,7 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Enable Owner Profile</button>
+          <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Enable Broker</button>
         </div>
       </div>
     </DetailPanel>
