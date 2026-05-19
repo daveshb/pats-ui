@@ -1445,6 +1445,7 @@ function documentPrimaryAction(doc: TradeDoc) {
 
 function Documents() {
   const [selectedDocumentId, setSelectedDocumentId] = useState(tradeDocuments[0]?.tradeDocumentId ?? "");
+  const [addDocOpen, setAddDocOpen] = useState(false);
   const selectedDocument = tradeDocuments.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? tradeDocuments[0];
   const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument.inboundTradeId);
   const relatedAsset = assets.find((a) => a.privateAssetId === selectedDocument.privateAssetId);
@@ -1463,7 +1464,15 @@ function Documents() {
 
   return (
     <>
-      <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue" />
+      <PageTitle
+        title="Documents"
+        subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
+        action={
+          <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
+            <Plus className="h-3.5 w-3.5" />Add Document
+          </button>
+        }
+      />
       <Toolbar placeholder="Search by document name, inbound trade ID, platform, type, or status..." />
       <div className="grid grid-cols-[1.25fr_0.95fr] gap-5">
         <ShellCard className="overflow-hidden">
@@ -1567,7 +1576,109 @@ function Documents() {
           </ShellCard>
         </div>
       </div>
+      {addDocOpen && <AddDocumentPanel onClose={() => setAddDocOpen(false)} />}
     </>
+  );
+}
+
+function AddDocumentPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <DetailPanel title="Add Document" subtitle="POST /documents — register a new document requirement for a workflow step" onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Document identity</h3>
+          <div className="mt-4 space-y-3">
+            <FormField label="Document name">
+              <input className={compactInputClass} placeholder="Subscription Agreement" />
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Type">
+                <select className={compactInputClass}>
+                  <option value="subscription_agreement">Subscription agreement</option>
+                  <option value="signature_packet">Signature packet</option>
+                  <option value="tax_document">Tax document</option>
+                  <option value="redemption_notice">Redemption notice</option>
+                  <option value="supporting_document">Supporting document</option>
+                  <option value="other">Other</option>
+                </select>
+              </FormField>
+              <FormField label="Platform">
+                <select className={compactInputClass}>
+                  <option value="manual_upload">Manual upload</option>
+                  <option value="docusign">DocuSign</option>
+                  <option value="icapital">iCapital</option>
+                  <option value="umb">UMB</option>
+                  <option value="other">Other</option>
+                </select>
+              </FormField>
+              <FormField label="Source">
+                <select className={compactInputClass}>
+                  <option value="ops">Ops</option>
+                  <option value="broker">Broker</option>
+                  <option value="external_platform">External platform</option>
+                  <option value="system">System</option>
+                </select>
+              </FormField>
+            </div>
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Workflow context</h3>
+          <p className="mt-1 text-xs text-slate-500">Links this document to an inbound trade and workflow step. Required by the backend.</p>
+          <div className="mt-4 space-y-3">
+            <FormField label="Inbound trade">
+              <select className={compactInputClass}>
+                <option value="">— Select inbound trade —</option>
+                {trades.map((t) => (
+                  <option key={t.inboundTradeId} value={t.inboundTradeId}>
+                    {t.inboundTradeId} · {t.ticker} · {t.broker}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Trade workflow step ID">
+              <input className={compactInputClass} placeholder="tws_xxxxx" />
+            </FormField>
+            <FormField label="Workflow requirement ID">
+              <input className={compactInputClass} placeholder="wr_xxxxx" />
+            </FormField>
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Optional context</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="Broker">
+              <select className={compactInputClass}>
+                <option value="">— None —</option>
+                {brokers.map((b) => (
+                  <option key={b.patsBrokerProfileId} value={b.patsBrokerProfileId}>{b.name}</option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Private asset">
+              <select className={compactInputClass}>
+                <option value="">— None —</option>
+                {assets.map((a) => (
+                  <option key={a.privateAssetId} value={a.privateAssetId}>{a.name}</option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+        </ShellCard>
+
+        <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 font-mono text-[10px] text-slate-500">
+          <span className="text-sky-400">POST</span> /documents<br />
+          <span className="text-slate-600">→ returns TradeDocumentResponse with tradeDocumentId (tdoc_xxx)</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Create Document</button>
+        </div>
+      </div>
+    </DetailPanel>
   );
 }
 
@@ -2183,41 +2294,61 @@ function Households() {
                 <Plus className="h-3 w-3" />Add
               </button>
             </div>
-            <div className="grid grid-cols-[1.5fr_0.7fr_1fr_1fr_0.85fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
-              <span>Person / Entity</span>
-              <span>Type</span>
-              <span>Contact</span>
-              <span>PII</span>
-              <span>Role</span>
-              <span>Status</span>
-            </div>
             <div className="divide-y divide-slate-800/80">
               {personsInHousehold.length === 0 ? (
                 <p className="px-5 py-4 text-xs text-slate-500">No persons added yet.</p>
               ) : personsInHousehold.map((person) => (
-                <div key={person.personId} className="grid grid-cols-[1.5fr_0.7fr_1fr_1fr_0.85fr_0.65fr] items-center px-5 py-3.5 text-sm">
-                  <span>
-                    <span className="block font-semibold text-slate-100">{personDisplayName(person)}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">{person.personId}</span>
-                  </span>
-                  <span><StatusBadge value={entityTypeLabel(person.entityType)} tone={entityTypeTone(person.entityType)} /></span>
-                  <span>
-                    <span className="block text-xs text-slate-300">{person.email}</span>
-                    {person.phone && <span className="mt-0.5 block text-[11px] text-slate-500">{person.phone}</span>}
-                  </span>
-                  <span>
+                <div key={person.personId} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${person.entityType === "human" ? "bg-slate-800 text-slate-300" : "bg-slate-800/60 text-sky-400"}`}>
+                        {person.entityType === "human"
+                          ? `${(person.firstName ?? "?")[0]}${(person.lastName ?? "?")[0]}`
+                          : person.entityType === "trust" ? "T" : person.entityType === "llc" ? "L" : "LP"}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-100">{personDisplayName(person)}</span>
+                          <StatusBadge value={entityTypeLabel(person.entityType)} tone={entityTypeTone(person.entityType)} />
+                        </div>
+                        <span className="text-[10px] text-slate-600">{person.personId}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <StatusBadge value={displayLabel(person.role)} tone="gray" />
+                      <StatusBadge value={person.status} tone={person.status === "active" ? "green" : "gray"} />
+                    </div>
+                  </div>
+                  <div className="mt-3 ml-[42px] flex flex-wrap gap-x-6 gap-y-1.5">
+                    <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <span className="text-[9px] font-semibold text-slate-600">EMAIL</span>
+                      {person.email}
+                    </span>
+                    {person.phone && (
+                      <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <span className="text-[9px] font-semibold text-slate-600">PHONE</span>
+                        {person.phone}
+                      </span>
+                    )}
                     {person.entityType === "human" && person.ssn && (
-                      <span className="block text-xs text-slate-400">SSN {person.ssn}</span>
+                      <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <span className="text-[9px] font-semibold text-slate-600">SSN</span>
+                        {person.ssn}
+                      </span>
                     )}
                     {person.entityType !== "human" && person.taxId && (
-                      <span className="block text-xs text-slate-400">EIN {person.taxId}</span>
+                      <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <span className="text-[9px] font-semibold text-slate-600">EIN</span>
+                        {person.taxId}
+                      </span>
                     )}
-                    {person.entityType === "human" && person.address && (
-                      <span className="mt-0.5 block text-[11px] text-slate-500">{person.city}, {person.state}</span>
+                    {person.entityType === "human" && person.city && (
+                      <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <span className="text-[9px] font-semibold text-slate-600">ADDR</span>
+                        {person.city}, {person.state}
+                      </span>
                     )}
-                  </span>
-                  <span><StatusBadge value={displayLabel(person.role)} tone="gray" /></span>
-                  <span><StatusBadge value={person.status} tone={person.status === "active" ? "green" : "gray"} /></span>
+                  </div>
                 </div>
               ))}
             </div>
