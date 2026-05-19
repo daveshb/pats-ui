@@ -125,11 +125,18 @@ interface Asset {
 interface HouseholdPerson {
   personId: string;
   householdId: string;
-  firstName: string;
-  lastName: string;
+  entityType: "human" | "trust" | "llc" | "limited_partnership";
+  firstName?: string;
+  lastName?: string;
+  entityName?: string;
   email: string;
-  phone: string;
-  role: "primary" | "authorized_signer" | "beneficiary" | "trustee" | "co_trustee";
+  phone?: string;
+  ssn?: string;
+  taxId?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  role: "primary" | "owner" | "joint_owner" | "spouse" | "authorized_signer" | "beneficiary" | "trustee" | "co_trustee" | "grantor" | "managing_member" | "general_partner" | "dependent";
   status: "active" | "inactive";
 }
 
@@ -138,10 +145,38 @@ interface HouseholdAccount {
   householdId: string;
   primaryPersonId: string;
   accountNumber: string;
-  accountType: "individual" | "joint" | "trust" | "ira" | "roth_ira" | "entity";
+  accountType: "individual" | "joint" | "trust" | "ira" | "roth_ira" | "entity" | "limited_partnership";
   custodian: string;
   authorizedSignerIds: string[];
+  grantorPersonId?: string;
+  beneficiaryPersonIds?: string[];
   status: "active" | "inactive";
+}
+
+interface TradeDoc {
+  tradeDocumentId: string;
+  inboundTradeId: string;
+  tradeWorkflowId?: string;
+  tradeWorkflowStepId: string;
+  workflowRequirementId: string;
+  patsBrokerProfileId?: string;
+  privateAssetId?: string;
+  userId?: string;
+  accountId?: string;
+  name: string;
+  type: "subscription_agreement" | "signature_packet" | "tax_document" | "redemption_notice" | "supporting_document" | "other";
+  platform: "manual_upload" | "docusign" | "icapital" | "umb" | "other";
+  source: "ops" | "broker" | "external_platform" | "system";
+  status: "pending" | "uploaded" | "sent" | "signed" | "completed" | "blocked" | "cancelled";
+  fileKey?: string;
+  externalEnvelopeId?: string;
+  externalUrl?: string;
+  sentAt?: string;
+  signedAt?: string;
+  completedAt?: string;
+  blockedReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface HouseholdRecord {
@@ -184,11 +219,12 @@ const workflows = [
   { id: "wt_fintech_subscription", policy: "once_per_user", name: "FinTech iCapital package", type: "Approval", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", broker: "iCapital Marketplace", asset: "FinTech Growth", status: "active", requirements: "3 requirements", updated: "1 hour ago", focus: "External platform, approval callback, manual review", requirementTypes: ["external_platform", "signature", "manual_review"] },
 ];
 
-const documents = [
-  { documentId: "doc_sub_001", workflowRequirementId: "wr_subscription_agreement", tradeWorkflowStepId: "tws_doc_001", name: "Subscription Agreement", tradeId: "it_d672e1c1", asset: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", platform: "DocuSign", envelope: "DS-44912", assignee: "Sarah Chen", status: "sent", due: "Today", callback: "Waiting for signature event" },
-  { documentId: "doc_sig_001", workflowRequirementId: "wr_investor_signature", tradeWorkflowStepId: "tws_sig_001", name: "Investor Signature", tradeId: "it_d672e1c1", asset: "TechCorp Series A", broker: "Goldman Sachs Advisor Solutions", platform: "DocuSign", envelope: "DS-44912", assignee: "Investor", status: "pending", due: "Today", callback: "Envelope created" },
-  { documentId: "doc_redemption_001", workflowRequirementId: "wr_redemption_notice", tradeWorkflowStepId: "tws_notice_001", name: "Redemption Notice", tradeId: "it_cb41f317", asset: "HealthTech Preferred", broker: "Morgan Stanley Alternatives", platform: "Manual Upload", envelope: "manual_upload", assignee: "Ops Team", status: "blocked", due: "Overdue", callback: "Missing uploaded file" },
-  { documentId: "doc_tax_001", workflowRequirementId: "wr_tax_package", tradeWorkflowStepId: "tws_tax_001", name: "Tax Package", tradeId: "it_a71e6d82", asset: "CleanEnergy Fund", broker: "JP Morgan Private Markets", platform: "UMB", envelope: "-", assignee: "Tax Ops", status: "pending", due: "May 8", callback: "Manual document module pending" },
+const tradeDocuments: TradeDoc[] = [
+  { tradeDocumentId: "tdoc_001", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_doc_001", workflowRequirementId: "wr_subscription_agreement", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", accountId: "acct-456", name: "Subscription Agreement", type: "subscription_agreement", platform: "docusign", source: "ops", status: "sent", externalEnvelopeId: "DS-44912", sentAt: "2026-05-01T14:30:00Z", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T14:30:00Z" },
+  { tradeDocumentId: "tdoc_002", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_sig_001", workflowRequirementId: "wr_investor_signature", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", name: "Investor Signature Packet", type: "signature_packet", platform: "docusign", source: "ops", status: "pending", externalEnvelopeId: "DS-44912", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T10:00:00Z" },
+  { tradeDocumentId: "tdoc_003", inboundTradeId: "it_cb41f317", tradeWorkflowId: "tw_002", tradeWorkflowStepId: "tws_notice_001", workflowRequirementId: "wr_redemption_notice", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", name: "Redemption Notice", type: "redemption_notice", platform: "manual_upload", source: "ops", status: "blocked", blockedReason: "Required file not uploaded — contact Ops team to provide the signed notice", createdAt: "2026-05-01T09:00:00Z", updatedAt: "2026-05-01T11:00:00Z" },
+  { tradeDocumentId: "tdoc_004", inboundTradeId: "it_a71e6d82", tradeWorkflowStepId: "tws_tax_001", workflowRequirementId: "wr_tax_package", patsBrokerProfileId: "pbp_jpm", privateAssetId: "pa_energy_c", name: "Tax Package", type: "tax_document", platform: "umb", source: "broker", status: "pending", createdAt: "2026-05-01T08:00:00Z", updatedAt: "2026-05-01T08:00:00Z" },
+  { tradeDocumentId: "tdoc_005", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sub_002", workflowRequirementId: "wr_icap_sub", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", name: "iCapital Subscription Package", type: "subscription_agreement", platform: "icapital", source: "external_platform", status: "uploaded", fileKey: "icap/tdoc_005/subscription.pdf", createdAt: "2026-05-01T07:30:00Z", updatedAt: "2026-05-01T13:00:00Z" },
 ];
 
 const workflowReviewChecks = [
@@ -289,29 +325,33 @@ const households: HouseholdRecord[] = [
 ];
 
 const householdPersons: HouseholdPerson[] = [
-  { personId: "per_001", householdId: "hh_001", firstName: "Sarah", lastName: "Chen", email: "sarah.chen@example.com", phone: "+1 (415) 555-0101", role: "primary", status: "active" },
-  { personId: "per_002", householdId: "hh_001", firstName: "Michael", lastName: "Chen", email: "m.chen@example.com", phone: "+1 (415) 555-0102", role: "authorized_signer", status: "active" },
-  { personId: "per_003", householdId: "hh_002", firstName: "Nina", lastName: "Walsh", email: "nina.walsh@example.com", phone: "+1 (212) 555-0201", role: "primary", status: "active" },
-  { personId: "per_004", householdId: "hh_002", firstName: "David", lastName: "Walsh", email: "d.walsh@example.com", phone: "+1 (212) 555-0202", role: "trustee", status: "active" },
-  { personId: "per_005", householdId: "hh_003", firstName: "Carlos", lastName: "Reed", email: "carlos.reed@example.com", phone: "+1 (312) 555-0301", role: "primary", status: "active" },
-  { personId: "per_006", householdId: "hh_003", firstName: "Maya", lastName: "Reed", email: "maya.reed@example.com", phone: "+1 (312) 555-0302", role: "co_trustee", status: "active" },
+  { personId: "per_001", householdId: "hh_001", entityType: "human", firstName: "Sarah", lastName: "Chen", email: "sarah.chen@example.com", phone: "+1 (415) 555-0101", ssn: "XXX-XX-4421", address: "142 Oak Street", city: "San Francisco", state: "CA", role: "primary", status: "active" },
+  { personId: "per_002", householdId: "hh_001", entityType: "human", firstName: "Michael", lastName: "Chen", email: "m.chen@example.com", phone: "+1 (415) 555-0102", ssn: "XXX-XX-8830", role: "joint_owner", status: "active" },
+  { personId: "per_007", householdId: "hh_001", entityType: "trust", entityName: "Chen Family Trust 2019", email: "sarah.chen@example.com", taxId: "XX-4421891", role: "trustee", status: "active" },
+  { personId: "per_003", householdId: "hh_002", entityType: "human", firstName: "Nina", lastName: "Walsh", email: "nina.walsh@example.com", phone: "+1 (212) 555-0201", ssn: "XXX-XX-7712", address: "88 Park Avenue", city: "New York", state: "NY", role: "primary", status: "active" },
+  { personId: "per_004", householdId: "hh_002", entityType: "human", firstName: "David", lastName: "Walsh", email: "d.walsh@example.com", phone: "+1 (212) 555-0202", ssn: "XXX-XX-3301", role: "trustee", status: "active" },
+  { personId: "per_008", householdId: "hh_002", entityType: "llc", entityName: "Walsh Capital Management LLC", email: "nina.walsh@example.com", taxId: "XX-8823401", role: "managing_member", status: "active" },
+  { personId: "per_005", householdId: "hh_003", entityType: "human", firstName: "Carlos", lastName: "Reed", email: "carlos.reed@example.com", phone: "+1 (312) 555-0301", ssn: "XXX-XX-6644", address: "500 N Michigan Ave", city: "Chicago", state: "IL", role: "primary", status: "active" },
+  { personId: "per_006", householdId: "hh_003", entityType: "human", firstName: "Maya", lastName: "Reed", email: "maya.reed@example.com", phone: "+1 (312) 555-0302", ssn: "XXX-XX-9915", role: "co_trustee", status: "active" },
+  { personId: "per_009", householdId: "hh_003", entityType: "limited_partnership", entityName: "Reed & Associates LP", email: "carlos.reed@example.com", taxId: "XX-3301774", role: "general_partner", status: "active" },
 ];
 
 const householdAccounts: HouseholdAccount[] = [
-  { accountId: "acc_001", householdId: "hh_001", primaryPersonId: "per_001", accountNumber: "GS-4492-A", accountType: "trust", custodian: "Goldman Sachs", authorizedSignerIds: ["per_001", "per_002"], status: "active" },
+  { accountId: "acc_001", householdId: "hh_001", primaryPersonId: "per_001", accountNumber: "GS-4492-A", accountType: "trust", custodian: "Goldman Sachs", authorizedSignerIds: ["per_001", "per_002"], grantorPersonId: "per_001", beneficiaryPersonIds: ["per_002"], status: "active" },
   { accountId: "acc_002", householdId: "hh_001", primaryPersonId: "per_001", accountNumber: "MSALT-7721", accountType: "individual", custodian: "Morgan Stanley", authorizedSignerIds: ["per_001"], status: "active" },
   { accountId: "acc_003", householdId: "hh_002", primaryPersonId: "per_003", accountNumber: "JPM-3310-B", accountType: "joint", custodian: "JP Morgan", authorizedSignerIds: ["per_003", "per_004"], status: "active" },
-  { accountId: "acc_004", householdId: "hh_002", primaryPersonId: "per_003", accountNumber: "ICAP-8854", accountType: "entity", custodian: "iCapital", authorizedSignerIds: ["per_003"], status: "active" },
-  { accountId: "acc_005", householdId: "hh_003", primaryPersonId: "per_005", accountNumber: "SCHWAB-1190", accountType: "trust", custodian: "Schwab", authorizedSignerIds: ["per_005", "per_006"], status: "active" },
+  { accountId: "acc_004", householdId: "hh_002", primaryPersonId: "per_008", accountNumber: "ICAP-8854", accountType: "entity", custodian: "iCapital", authorizedSignerIds: ["per_003", "per_008"], status: "active" },
+  { accountId: "acc_005", householdId: "hh_003", primaryPersonId: "per_005", accountNumber: "SCHWAB-1190", accountType: "trust", custodian: "Schwab", authorizedSignerIds: ["per_005", "per_006"], grantorPersonId: "per_005", beneficiaryPersonIds: ["per_006"], status: "active" },
+  { accountId: "acc_006", householdId: "hh_003", primaryPersonId: "per_009", accountNumber: "SCHWAB-LP-002", accountType: "limited_partnership", custodian: "Schwab", authorizedSignerIds: ["per_009", "per_005"], status: "active" },
 ];
 
 const tradeGridClass = "grid-cols-[1.15fr_1.2fr_1.25fr_1.25fr_0.8fr_0.95fr_1fr]";
 
 function toneFor(value: string): StatusTone {
   const lower = value.toLowerCase().replaceAll("_", " ");
-  if (["buy", "subscribe", "filled", "active", "validated", "already eligible", "no template", "executed", "sent", "signed", "completed", "eligible", "connected", "approved", "fill returned"].includes(lower)) return "green";
+  if (["buy", "subscribe", "filled", "active", "validated", "already eligible", "no template", "executed", "sent", "signed", "completed", "uploaded", "eligible", "connected", "approved", "fill returned"].includes(lower)) return "green";
   if (["pending", "partial", "in progress", "retrying", "needs review", "workflow required", "no eligibility", "every trade", "medium", "workflow pending", "docs pending", "returning fill", "waiting"].includes(lower)) return "yellow";
-  if (["sell", "redeem", "failed", "rejected", "blocked", "critical", "high", "low", "disconnected", "unresolved", "revoked", "expired"].includes(lower)) return "red";
+  if (["sell", "redeem", "failed", "rejected", "blocked", "cancelled", "critical", "high", "low", "disconnected", "unresolved", "revoked", "expired"].includes(lower)) return "red";
   if (["received", "routed", "open", "once per user"].includes(lower)) return "blue";
   if (["draft", "not started"].includes(lower)) return "gray";
   return "purple";
@@ -331,6 +371,27 @@ function badgeClasses(tone: StatusTone) {
 
 function displayLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function personDisplayName(p: HouseholdPerson): string {
+  if (p.entityType === "human") return `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim();
+  return p.entityName ?? "—";
+}
+
+function entityTypeLabel(t: HouseholdPerson["entityType"]): string {
+  if (t === "human") return "Human";
+  if (t === "trust") return "Trust";
+  if (t === "llc") return "LLC";
+  if (t === "limited_partnership") return "LP";
+  return t;
+}
+
+function entityTypeTone(t: HouseholdPerson["entityType"]): StatusTone {
+  if (t === "human") return "gray";
+  if (t === "trust") return "blue";
+  if (t === "llc") return "purple";
+  if (t === "limited_partnership") return "yellow";
+  return "gray";
 }
 
 function tradeNextAction(trade: Trade) {
@@ -1319,17 +1380,17 @@ function DocumentsLegacy() {
             <span>Status</span>
             <span>Due</span>
           </div>
-          {documents.map((doc) => (
-            <div key={doc.name} className="grid grid-cols-[1.15fr_0.65fr_0.85fr_0.85fr_0.75fr_0.75fr] items-center border-t border-slate-800/80 px-5 py-4 text-sm">
+          {tradeDocuments.map((doc) => (
+            <div key={doc.tradeDocumentId} className="grid grid-cols-[1.15fr_0.65fr_0.85fr_0.85fr_0.75fr_0.75fr] items-center border-t border-slate-800/80 px-5 py-4 text-sm">
               <span>
                 <span className="block font-semibold text-slate-100">{doc.name}</span>
-                <span className="mt-1 block text-[11px] text-slate-500">{doc.asset} · {doc.broker}</span>
+                <span className="mt-1 block text-[11px] text-slate-500">{doc.privateAssetId ?? "—"}</span>
               </span>
-              <span className="text-xs text-sky-300">{doc.tradeId.replace("it_", "Trade ")}</span>
-              <span className="text-xs text-slate-300">{doc.platform}</span>
-              <span className="text-xs text-slate-500">{doc.envelope}</span>
+              <span className="text-xs text-sky-300">{doc.inboundTradeId}</span>
+              <span className="text-xs text-slate-300">{displayLabel(doc.platform)}</span>
+              <span><StatusBadge value={displayLabel(doc.type)} tone="gray" /></span>
               <span><StatusBadge value={doc.status} /></span>
-              <span className={`text-xs ${doc.due === "Overdue" ? "font-semibold text-rose-300" : "text-slate-400"}`}>{doc.due}</span>
+              <span className="text-xs text-slate-400">{displayLabel(doc.source)}</span>
             </div>
           ))}
         </ShellCard>
@@ -1363,69 +1424,76 @@ function DocumentsLegacy() {
   );
 }
 
-function documentNextAction(doc: typeof documents[number]) {
-  if (doc.status === "pending") return doc.platform === "Manual Upload" ? "Upload document" : "Send for signature";
-  if (doc.status === "sent") return "Wait for signature";
-  if (doc.status === "signed") return "Complete step";
-  if (doc.status === "completed") return "No action";
-  if (doc.status === "blocked") return "Fix document issue";
+function documentNextAction(doc: TradeDoc) {
+  if (doc.status === "pending") return doc.platform === "manual_upload" ? "Upload file" : "Send for signature";
+  if (doc.status === "uploaded") return "Send for signature";
+  if (doc.status === "sent") return "Waiting for signature";
+  if (doc.status === "signed") return "Mark complete";
+  if (doc.status === "completed") return "No action needed";
+  if (doc.status === "blocked") return "Fix: " + (doc.blockedReason ?? "Review issue").slice(0, 32);
+  if (doc.status === "cancelled") return "Cancelled";
   return "Review";
 }
 
-function documentPrimaryAction(doc: typeof documents[number]) {
-  if (doc.platform === "Manual Upload") return "Upload document";
-  if (doc.platform === "DocuSign") return "Open signing link";
-  if (doc.platform === "iCapital") return "Open iCapital task";
+function documentPrimaryAction(doc: TradeDoc) {
+  if (doc.platform === "manual_upload") return "Upload document";
+  if (doc.platform === "docusign") return "Open DocuSign";
+  if (doc.platform === "icapital") return "Open iCapital";
+  if (doc.platform === "umb") return "Open UMB portal";
   return "Open document";
 }
 
 function Documents() {
-  const [selectedDocumentId, setSelectedDocumentId] = useState(documents[0]?.documentId ?? "");
-  const selectedDocument = documents.find((doc) => doc.documentId === selectedDocumentId) ?? documents[0];
-  const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument.tradeId);
+  const [selectedDocumentId, setSelectedDocumentId] = useState(tradeDocuments[0]?.tradeDocumentId ?? "");
+  const selectedDocument = tradeDocuments.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? tradeDocuments[0];
+  const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument.inboundTradeId);
+  const relatedAsset = assets.find((a) => a.privateAssetId === selectedDocument.privateAssetId);
+  const relatedBroker = brokers.find((b) => b.patsBrokerProfileId === selectedDocument.patsBrokerProfileId);
+
   const documentFlow = [
-    ["Required", "Workflow step needs this document"],
-    ["Prepared", selectedDocument.platform === "Manual Upload" ? "Ops uploads the file" : "Envelope or platform task is created"],
-    ["Signed / uploaded", "Investor, broker, or Ops completes the document"],
-    ["Completed", "The related workflow step can be completed"],
+    ["Required", "Workflow step added this document — Ops must fulfill it before the trade can continue"],
+    ["Uploaded / Prepared", selectedDocument.platform === "manual_upload" ? "Ops uploads the file via the document API" : `${displayLabel(selectedDocument.platform)} envelope or task is created`],
+    ["Signed / Confirmed", "Investor, broker, or external platform completes the document"],
+    ["Completed", "The related TradeWorkflowStep can now be marked complete"],
   ];
-  const activeStep = selectedDocument.status === "completed" ? 4 : selectedDocument.status === "signed" ? 3 : selectedDocument.status === "sent" ? 2 : 1;
+  const activeStep =
+    selectedDocument.status === "completed" ? 4 :
+    selectedDocument.status === "signed" ? 3 :
+    (selectedDocument.status === "sent" || selectedDocument.status === "uploaded") ? 2 : 1;
 
   return (
     <>
-      <PageTitle title="Documents" subtitle="Documents and signatures required by workflows before a trade can continue" />
-      <Toolbar placeholder="Search document, broker, private asset, platform, status, or next action..." />
+      <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue" />
+      <Toolbar placeholder="Search by document name, inbound trade ID, platform, type, or status..." />
       <div className="grid grid-cols-[1.25fr_0.95fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-100">Document work</h2>
-            <p className="mt-1 text-[11px] text-slate-500">Each item is tied to a workflow step for a broker-owned private asset.</p>
+            <h2 className="text-sm font-semibold text-slate-100">Document queue</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Each item is tied to a TradeWorkflowStep. Completing it unblocks the workflow.</p>
           </div>
-          <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.65fr_0.9fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+          <div className="grid grid-cols-[1.3fr_0.85fr_0.75fr_0.65fr_0.95fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
             <span>Document</span>
-            <span>Asset / broker</span>
+            <span>Type</span>
             <span>Platform</span>
             <span>Status</span>
             <span>Next action</span>
           </div>
           <div className="divide-y divide-slate-800/80">
-            {documents.map((doc) => {
-              const isSelected = doc.documentId === selectedDocument.documentId;
+            {tradeDocuments.map((doc) => {
+              const isSelected = doc.tradeDocumentId === selectedDocument.tradeDocumentId;
+              const docAsset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
               return (
                 <button
-                  key={doc.documentId}
-                  onClick={() => setSelectedDocumentId(doc.documentId)}
-                  className={`grid w-full grid-cols-[1.2fr_1fr_0.7fr_0.65fr_0.9fr] items-center px-5 py-4 text-left text-sm transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
+                  key={doc.tradeDocumentId}
+                  onClick={() => setSelectedDocumentId(doc.tradeDocumentId)}
+                  className={`grid w-full grid-cols-[1.3fr_0.85fr_0.75fr_0.65fr_0.95fr] items-center px-5 py-4 text-left text-sm transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
                 >
                   <span>
                     <span className="block font-semibold text-slate-100">{doc.name}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">{doc.due === "Overdue" ? "Overdue" : `Due ${doc.due}`}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">{docAsset?.name ?? doc.inboundTradeId}</span>
                   </span>
-                  <span>
-                    <span className="block text-xs font-semibold text-slate-300">{doc.asset}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">{doc.broker}</span>
-                  </span>
-                  <span className="text-xs text-slate-300">{doc.platform}</span>
+                  <span><StatusBadge value={displayLabel(doc.type)} tone="gray" /></span>
+                  <span className="text-xs text-slate-300">{displayLabel(doc.platform)}</span>
                   <span><StatusBadge value={doc.status} /></span>
                   <span className="text-xs font-semibold text-sky-300">{documentNextAction(doc)}</span>
                 </button>
@@ -1439,33 +1507,47 @@ function Documents() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selectedDocument.name}</h2>
-                <p className="mt-1 text-xs text-slate-500">{selectedDocument.asset} - {selectedDocument.broker}</p>
+                <p className="mt-1 text-xs text-slate-500">{relatedAsset?.name ?? selectedDocument.privateAssetId ?? "No asset"} · {relatedBroker?.name ?? selectedDocument.patsBrokerProfileId ?? "No broker"}</p>
               </div>
               <StatusBadge value={selectedDocument.status} />
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <Info label="Platform" value={selectedDocument.platform} />
-              <Info label="Due" value={selectedDocument.due} />
-              <Info label="Related trade" value={relatedTrade ? `${relatedTrade.ticker} - ${tradeInvestorLabel(relatedTrade)}` : "Not assigned"} />
-              <Info label="Next action" value={documentNextAction(selectedDocument)} />
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <Info label="Type" value={displayLabel(selectedDocument.type)} />
+              <Info label="Platform" value={displayLabel(selectedDocument.platform)} />
+              <Info label="Source" value={displayLabel(selectedDocument.source)} />
+              <Info label="Inbound trade" value={selectedDocument.inboundTradeId} />
+              {selectedDocument.tradeWorkflowId && <Info label="Trade workflow" value={selectedDocument.tradeWorkflowId} />}
+              {selectedDocument.externalEnvelopeId && <Info label="Envelope ID" value={selectedDocument.externalEnvelopeId} />}
+              {selectedDocument.sentAt && <Info label="Sent at" value={new Date(selectedDocument.sentAt).toLocaleString()} />}
+              {selectedDocument.signedAt && <Info label="Signed at" value={new Date(selectedDocument.signedAt).toLocaleString()} />}
+              {selectedDocument.completedAt && <Info label="Completed at" value={new Date(selectedDocument.completedAt).toLocaleString()} />}
+              {selectedDocument.fileKey && <Info label="File" value={selectedDocument.fileKey} />}
             </div>
-            <div className="mt-4 rounded-md border border-slate-800 bg-[#101318] p-3 text-xs text-slate-400">
-              {selectedDocument.callback}
-            </div>
+            {selectedDocument.status === "blocked" && selectedDocument.blockedReason && (
+              <div className="mt-4 rounded-md border border-rose-400/25 bg-rose-400/10 p-3 text-xs font-semibold text-rose-300">
+                Blocked: {selectedDocument.blockedReason}
+              </div>
+            )}
+            {relatedTrade && (
+              <div className="mt-3 rounded-md border border-slate-800 bg-[#101318] p-3 text-xs text-slate-400">
+                Related trade: {relatedTrade.ticker} · {relatedTrade.broker} · <StatusBadge value={relatedTrade.status} />
+              </div>
+            )}
           </ShellCard>
 
           <ShellCard className="p-5">
-            <h2 className="text-sm font-semibold text-white">Document progress</h2>
-            <div className="mt-4 space-y-3">
+            <h2 className="text-sm font-semibold text-white">Document lifecycle</h2>
+            <div className="mt-4 space-y-2.5">
               {documentFlow.map(([title, description], index) => {
-                const isDone = index + 1 <= activeStep && selectedDocument.status !== "blocked";
+                const isDone = index + 1 <= activeStep && selectedDocument.status !== "blocked" && selectedDocument.status !== "cancelled";
                 const isBlocked = selectedDocument.status === "blocked" && index === 1;
+                const isCancelled = selectedDocument.status === "cancelled";
                 return (
-                  <div key={title} className={`grid grid-cols-[24px_1fr] gap-3 rounded-md border p-3 ${isBlocked ? "border-rose-400/25 bg-rose-400/10" : isDone ? "border-emerald-400/20 bg-emerald-400/10" : "border-slate-800 bg-slate-950/35"}`}>
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold ${isBlocked ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : isDone ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300" : "border-slate-700 bg-slate-900 text-slate-500"}`}>{index + 1}</span>
+                  <div key={title} className={`grid grid-cols-[24px_1fr] gap-3 rounded-md border p-3 ${isBlocked ? "border-rose-400/25 bg-rose-400/10" : isCancelled ? "border-slate-700 bg-slate-900/40" : isDone ? "border-emerald-400/20 bg-emerald-400/10" : "border-slate-800 bg-slate-950/35"}`}>
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold ${isBlocked ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : isCancelled ? "border-slate-600 bg-slate-800 text-slate-500" : isDone ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300" : "border-slate-700 bg-slate-900 text-slate-500"}`}>{index + 1}</span>
                     <div>
                       <p className="text-sm font-semibold text-slate-100">{title}</p>
-                      <p className="mt-1 text-xs text-slate-500">{description}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{description}</p>
                     </div>
                   </div>
                 );
@@ -1474,11 +1556,13 @@ function Documents() {
           </ShellCard>
 
           <ShellCard className="p-5">
-            <h2 className="text-sm font-semibold text-white">Backend direction</h2>
-            <p className="mt-2 text-xs leading-5 text-slate-500">The first version should support manual Ops upload. DocuSign and iCapital can be added later behind the same document status flow.</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <h2 className="text-sm font-semibold text-white">Actions</h2>
+            <p className="mt-1 text-xs text-slate-500">These map directly to backend endpoints: <span className="text-slate-400">POST /documents</span>, <span className="text-slate-400">POST /documents/:id/complete</span>, <span className="text-slate-400">POST /documents/:id/block</span>, <span className="text-slate-400">PATCH /documents/:id/status</span></p>
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
               <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">{documentPrimaryAction(selectedDocument)}</button>
-              <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Mark complete</button>
+              <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">Complete document</button>
+              <button className="h-9 rounded-md border border-rose-400/30 bg-rose-400/10 text-xs font-semibold text-rose-300">Block with reason</button>
+              <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400">Cancel document</button>
             </div>
           </ShellCard>
         </div>
@@ -2046,7 +2130,7 @@ function Households() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold text-slate-100">{hh.name}</h3>
-                      <p className="mt-0.5 text-[11px] text-slate-500">{primary ? `${primary.firstName} ${primary.lastName}` : "No primary contact"}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{primary ? personDisplayName(primary) : "No primary contact"}</p>
                     </div>
                     <StatusBadge value={hh.status} tone={hh.status === "active" ? "green" : "gray"} />
                   </div>
@@ -2072,7 +2156,7 @@ function Households() {
             <div className="mt-5 grid grid-cols-4 gap-3">
               <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
                 <p className="text-[8px] font-semibold text-slate-600">Primary contact</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName}` : "Not assigned"}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{primaryContact ? personDisplayName(primaryContact) : "Not assigned"}</p>
               </div>
               <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
                 <p className="text-[8px] font-semibold text-slate-600">Persons</p>
@@ -2099,10 +2183,11 @@ function Households() {
                 <Plus className="h-3 w-3" />Add
               </button>
             </div>
-            <div className="grid grid-cols-[1.4fr_1fr_1fr_0.8fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
-              <span>Person</span>
-              <span>Email</span>
-              <span>Phone</span>
+            <div className="grid grid-cols-[1.5fr_0.7fr_1fr_1fr_0.85fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+              <span>Person / Entity</span>
+              <span>Type</span>
+              <span>Contact</span>
+              <span>PII</span>
               <span>Role</span>
               <span>Status</span>
             </div>
@@ -2110,13 +2195,27 @@ function Households() {
               {personsInHousehold.length === 0 ? (
                 <p className="px-5 py-4 text-xs text-slate-500">No persons added yet.</p>
               ) : personsInHousehold.map((person) => (
-                <div key={person.personId} className="grid grid-cols-[1.4fr_1fr_1fr_0.8fr_0.65fr] items-center px-5 py-3.5 text-sm">
+                <div key={person.personId} className="grid grid-cols-[1.5fr_0.7fr_1fr_1fr_0.85fr_0.65fr] items-center px-5 py-3.5 text-sm">
                   <span>
-                    <span className="block font-semibold text-slate-100">{person.firstName} {person.lastName}</span>
+                    <span className="block font-semibold text-slate-100">{personDisplayName(person)}</span>
                     <span className="mt-0.5 block text-[11px] text-slate-500">{person.personId}</span>
                   </span>
-                  <span className="text-xs text-slate-300">{person.email}</span>
-                  <span className="text-xs text-slate-400">{person.phone}</span>
+                  <span><StatusBadge value={entityTypeLabel(person.entityType)} tone={entityTypeTone(person.entityType)} /></span>
+                  <span>
+                    <span className="block text-xs text-slate-300">{person.email}</span>
+                    {person.phone && <span className="mt-0.5 block text-[11px] text-slate-500">{person.phone}</span>}
+                  </span>
+                  <span>
+                    {person.entityType === "human" && person.ssn && (
+                      <span className="block text-xs text-slate-400">SSN {person.ssn}</span>
+                    )}
+                    {person.entityType !== "human" && person.taxId && (
+                      <span className="block text-xs text-slate-400">EIN {person.taxId}</span>
+                    )}
+                    {person.entityType === "human" && person.address && (
+                      <span className="mt-0.5 block text-[11px] text-slate-500">{person.city}, {person.state}</span>
+                    )}
+                  </span>
                   <span><StatusBadge value={displayLabel(person.role)} tone="gray" /></span>
                   <span><StatusBadge value={person.status} tone={person.status === "active" ? "green" : "gray"} /></span>
                 </div>
@@ -2134,10 +2233,11 @@ function Households() {
                 <Plus className="h-3 w-3" />Add
               </button>
             </div>
-            <div className="grid grid-cols-[1fr_0.9fr_1fr_1.3fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+            <div className="grid grid-cols-[1fr_0.85fr_0.9fr_1.5fr_1.3fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
               <span>Account number</span>
               <span>Type</span>
               <span>Custodian</span>
+              <span>Trust / LP details</span>
               <span>Authorized signers</span>
               <span>Status</span>
             </div>
@@ -2146,24 +2246,43 @@ function Households() {
                 <p className="px-5 py-4 text-xs text-slate-500">No accounts added yet.</p>
               ) : accountsInHousehold.map((account) => {
                 const signers = account.authorizedSignerIds.map((id) => householdPersons.find((p) => p.personId === id)).filter(Boolean) as HouseholdPerson[];
+                const grantor = account.grantorPersonId ? householdPersons.find((p) => p.personId === account.grantorPersonId) : undefined;
+                const beneficiaries = (account.beneficiaryPersonIds ?? []).map((id) => householdPersons.find((p) => p.personId === id)).filter(Boolean) as HouseholdPerson[];
                 return (
-                  <div key={account.accountId} className="grid grid-cols-[1fr_0.9fr_1fr_1.3fr_0.65fr] items-center px-5 py-3.5 text-sm">
+                  <div key={account.accountId} className="grid grid-cols-[1fr_0.85fr_0.9fr_1.5fr_1.3fr_0.65fr] items-start px-5 py-3.5 text-sm">
                     <span>
                       <span className="block font-semibold text-slate-100">{account.accountNumber}</span>
                       <span className="mt-0.5 block text-[11px] text-slate-500">{account.accountId}</span>
                     </span>
-                    <span><StatusBadge value={displayLabel(account.accountType)} tone="blue" /></span>
-                    <span className="text-xs text-slate-300">{account.custodian}</span>
-                    <span>
+                    <span className="pt-0.5"><StatusBadge value={displayLabel(account.accountType)} tone="blue" /></span>
+                    <span className="text-xs text-slate-300 pt-0.5">{account.custodian}</span>
+                    <span className="space-y-1 pt-0.5">
+                      {grantor && (
+                        <div>
+                          <span className="text-[9px] font-semibold text-slate-600">GRANTOR</span>
+                          <span className="ml-1.5 text-[11px] text-slate-300">{personDisplayName(grantor)}</span>
+                        </div>
+                      )}
+                      {beneficiaries.length > 0 && (
+                        <div>
+                          <span className="text-[9px] font-semibold text-slate-600">BENEFICIAR{beneficiaries.length > 1 ? "IES" : "Y"}</span>
+                          <span className="ml-1.5 text-[11px] text-slate-300">{beneficiaries.map(personDisplayName).join(", ")}</span>
+                        </div>
+                      )}
+                      {!grantor && beneficiaries.length === 0 && (
+                        <span className="text-[11px] text-slate-600">—</span>
+                      )}
+                    </span>
+                    <span className="pt-0.5">
                       <div className="flex flex-wrap gap-1">
                         {signers.map((signer) => (
                           <span key={signer.personId} className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300">
-                            {signer.firstName} {signer.lastName}
+                            {personDisplayName(signer)}
                           </span>
                         ))}
                       </div>
                     </span>
-                    <span><StatusBadge value={account.status} tone={account.status === "active" ? "green" : "gray"} /></span>
+                    <span className="pt-0.5"><StatusBadge value={account.status} tone={account.status === "active" ? "green" : "gray"} /></span>
                   </div>
                 );
               })}
@@ -2206,43 +2325,131 @@ function CreateHouseholdPanel({ onClose }: { onClose: () => void }) {
 }
 
 function AddPersonPanel({ household, onClose }: { household: HouseholdRecord; onClose: () => void }) {
+  const [entityType, setEntityType] = useState<HouseholdPerson["entityType"]>("human");
+  const isHuman = entityType === "human";
+
+  const entityTypeOptions: { value: HouseholdPerson["entityType"]; label: string; desc: string }[] = [
+    { value: "human", label: "Individual", desc: "A natural person" },
+    { value: "trust", label: "Trust", desc: "Revocable or irrevocable trust" },
+    { value: "llc", label: "LLC", desc: "Limited liability company" },
+    { value: "limited_partnership", label: "LP", desc: "Limited partnership" },
+  ];
+
   return (
-    <DetailPanel title="Add Person" subtitle={`Add a member to ${household.name}`} onClose={onClose}>
+    <DetailPanel title="Add Person / Entity" subtitle={`Add a member to ${household.name}`} onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
-          <h3 className="text-sm font-semibold text-white">Personal info</h3>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <FormField label="First name">
-              <input className={compactInputClass} placeholder="Sarah" />
-            </FormField>
-            <FormField label="Last name">
-              <input className={compactInputClass} placeholder="Chen" />
-            </FormField>
-            <FormField label="Email">
-              <input className={compactInputClass} placeholder="sarah@example.com" />
-            </FormField>
-            <FormField label="Phone">
-              <input className={compactInputClass} placeholder="+1 (415) 555-0100" />
-            </FormField>
+          <h3 className="text-sm font-semibold text-white">Type</h3>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {entityTypeOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setEntityType(opt.value)}
+                className={`rounded-md border px-3 py-2.5 text-left transition ${entityType === opt.value ? "border-sky-500 bg-sky-500/10 text-sky-300" : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"}`}
+              >
+                <span className="block text-xs font-semibold">{opt.label}</span>
+                <span className="mt-0.5 block text-[10px] text-slate-500">{opt.desc}</span>
+              </button>
+            ))}
           </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">{isHuman ? "Personal info" : "Entity info"}</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {isHuman ? (
+              <>
+                <FormField label="First name">
+                  <input className={compactInputClass} placeholder="Sarah" />
+                </FormField>
+                <FormField label="Last name">
+                  <input className={compactInputClass} placeholder="Chen" />
+                </FormField>
+              </>
+            ) : (
+              <div className="col-span-2">
+                <FormField label="Legal entity name">
+                  <input className={compactInputClass} placeholder={entityType === "trust" ? "Chen Family Trust 2019" : entityType === "llc" ? "Walsh Capital LLC" : "Reed & Associates LP"} />
+                </FormField>
+              </div>
+            )}
+            <FormField label="Email">
+              <input className={compactInputClass} placeholder="contact@example.com" />
+            </FormField>
+            {isHuman && (
+              <FormField label="Phone">
+                <input className={compactInputClass} placeholder="+1 (415) 555-0100" />
+              </FormField>
+            )}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {isHuman ? (
+              <>
+                <FormField label="SSN (last 4 stored only)">
+                  <input className={compactInputClass} placeholder="XXX-XX-0000" />
+                </FormField>
+                <div />
+                <div className="col-span-2">
+                  <FormField label="Address">
+                    <input className={compactInputClass} placeholder="142 Oak Street" />
+                  </FormField>
+                </div>
+                <FormField label="City">
+                  <input className={compactInputClass} placeholder="San Francisco" />
+                </FormField>
+                <FormField label="State">
+                  <input className={compactInputClass} placeholder="CA" />
+                </FormField>
+              </>
+            ) : (
+              <div className="col-span-2">
+                <FormField label="Tax ID / EIN">
+                  <input className={compactInputClass} placeholder="XX-0000000" />
+                </FormField>
+              </div>
+            )}
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Role in household</h3>
           <div className="mt-3">
-            <FormField label="Role in household">
+            <FormField label="Role">
               <select className={compactInputClass}>
-                <option value="primary">Primary contact</option>
-                <option value="authorized_signer">Authorized signer</option>
-                <option value="beneficiary">Beneficiary</option>
-                <option value="trustee">Trustee</option>
-                <option value="co_trustee">Co-trustee</option>
+                {isHuman ? (
+                  <>
+                    <option value="primary">Primary contact</option>
+                    <option value="owner">Owner</option>
+                    <option value="joint_owner">Joint owner</option>
+                    <option value="spouse">Spouse</option>
+                    <option value="authorized_signer">Authorized signer</option>
+                    <option value="beneficiary">Beneficiary</option>
+                    <option value="trustee">Trustee</option>
+                    <option value="co_trustee">Co-trustee</option>
+                    <option value="grantor">Grantor</option>
+                    <option value="dependent">Dependent</option>
+                  </>
+                ) : (
+                  <>
+                    {entityType === "trust" && <option value="trustee">Trustee (trust entity)</option>}
+                    {entityType === "llc" && <option value="managing_member">Managing member</option>}
+                    {entityType === "limited_partnership" && <option value="general_partner">General partner</option>}
+                    <option value="authorized_signer">Authorized signer</option>
+                  </>
+                )}
               </select>
             </FormField>
           </div>
         </ShellCard>
+
         <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 text-xs text-slate-400">
-          Authorized signers can be linked to accounts in this household. Only one person should be set as the primary contact.
+          {isHuman
+            ? "SSN is stored masked. Authorized signers can be linked to accounts in this household. Only one person should be set as the primary contact."
+            : "Entities (trust, LLC, LP) are stored as persons and can be linked as authorized signers on accounts. Use Tax ID / EIN for document auto-population."}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Person</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add {isHuman ? "Person" : "Entity"}</button>
         </div>
       </div>
     </DetailPanel>
@@ -2250,6 +2457,10 @@ function AddPersonPanel({ household, onClose }: { household: HouseholdRecord; on
 }
 
 function AddAccountPanel({ household, persons, onClose }: { household: HouseholdRecord; persons: HouseholdPerson[]; onClose: () => void }) {
+  const [accountType, setAccountType] = useState<HouseholdAccount["accountType"]>("individual");
+  const isTrust = accountType === "trust";
+  const isLP = accountType === "limited_partnership";
+
   return (
     <DetailPanel title="Add Account" subtitle={`Link an account to ${household.name}`} onClose={onClose}>
       <div className="space-y-4">
@@ -2260,13 +2471,14 @@ function AddAccountPanel({ household, persons, onClose }: { household: Household
               <input className={compactInputClass} placeholder="GS-4492-A" />
             </FormField>
             <FormField label="Account type">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={accountType} onChange={(e) => setAccountType(e.target.value as HouseholdAccount["accountType"])}>
                 <option value="individual">Individual</option>
                 <option value="joint">Joint</option>
                 <option value="trust">Trust</option>
                 <option value="ira">IRA</option>
                 <option value="roth_ira">Roth IRA</option>
                 <option value="entity">Entity</option>
+                <option value="limited_partnership">Limited Partnership</option>
               </select>
             </FormField>
             <FormField label="Custodian">
@@ -2278,31 +2490,83 @@ function AddAccountPanel({ household, persons, onClose }: { household: Household
                 <option>Schwab</option>
               </select>
             </FormField>
-            <FormField label="Primary person">
+            <FormField label="Primary person / entity">
               <select className={compactInputClass}>
                 {persons.length === 0
                   ? <option>No persons added yet</option>
-                  : persons.map((p) => <option key={p.personId} value={p.personId}>{p.firstName} {p.lastName}</option>)
+                  : persons.map((p) => <option key={p.personId} value={p.personId}>{personDisplayName(p)}</option>)
                 }
               </select>
             </FormField>
           </div>
         </ShellCard>
+
+        {(isTrust || isLP) && (
+          <ShellCard className="p-4">
+            <h3 className="text-sm font-semibold text-white">{isTrust ? "Trust details" : "Partnership details"}</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              {isTrust ? "Specify the grantor and beneficiaries for this trust account. These are used to auto-populate subscription documents." : "Specify the general partner for this LP account."}
+            </p>
+            <div className="mt-4 space-y-3">
+              {isTrust && (
+                <FormField label="Grantor">
+                  <select className={compactInputClass}>
+                    <option value="">— Select grantor —</option>
+                    {persons.map((p) => (
+                      <option key={p.personId} value={p.personId}>{personDisplayName(p)} ({displayLabel(p.role)})</option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+              {isLP && (
+                <FormField label="General partner">
+                  <select className={compactInputClass}>
+                    <option value="">— Select general partner —</option>
+                    {persons.filter((p) => p.role === "general_partner" || p.entityType === "limited_partnership").map((p) => (
+                      <option key={p.personId} value={p.personId}>{personDisplayName(p)}</option>
+                    ))}
+                    {persons.filter((p) => p.role !== "general_partner" && p.entityType !== "limited_partnership").map((p) => (
+                      <option key={p.personId} value={p.personId}>{personDisplayName(p)} ({displayLabel(p.role)})</option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+              {isTrust && (
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold text-slate-500">Beneficiaries</p>
+                  <div className="space-y-2">
+                    {persons.map((person) => (
+                      <label key={person.personId} className="flex cursor-pointer items-center gap-2.5 rounded-md border border-slate-800 px-3 py-2 text-xs text-slate-300">
+                        <input type="checkbox" className="h-3.5 w-3.5 accent-sky-500" defaultChecked={person.role === "beneficiary"} />
+                        <span className="font-semibold">{personDisplayName(person)}</span>
+                        <StatusBadge value={entityTypeLabel(person.entityType)} tone={entityTypeTone(person.entityType)} />
+                        <StatusBadge value={displayLabel(person.role)} tone="gray" />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ShellCard>
+        )}
+
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Authorized signers</h3>
-          <p className="mt-1 text-xs text-slate-500">Select persons from this household who can sign documents for this account.</p>
+          <p className="mt-1 text-xs text-slate-500">Select persons or entities from this household who can sign documents for this account.</p>
           <div className="mt-3 space-y-2">
             {persons.length === 0 ? (
               <p className="text-xs text-slate-500">Add persons to the household first.</p>
             ) : persons.map((person) => (
               <label key={person.personId} className="flex cursor-pointer items-center gap-2.5 rounded-md border border-slate-800 px-3 py-2.5 text-xs text-slate-300">
                 <input type="checkbox" className="h-3.5 w-3.5 accent-sky-500" defaultChecked={person.role === "primary" || person.role === "authorized_signer"} />
-                <span className="font-semibold">{person.firstName} {person.lastName}</span>
+                <span className="font-semibold flex-1">{personDisplayName(person)}</span>
+                <StatusBadge value={entityTypeLabel(person.entityType)} tone={entityTypeTone(person.entityType)} />
                 <StatusBadge value={displayLabel(person.role)} tone="gray" />
               </label>
             ))}
           </div>
         </ShellCard>
+
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
           <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Account</button>
