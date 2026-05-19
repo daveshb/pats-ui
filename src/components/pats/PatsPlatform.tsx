@@ -41,6 +41,7 @@ type NavKey =
   | "assets"
   | "workflows"
   | "documents"
+  | "households"
   | "execution"
   | "integrations"
   | "activity"
@@ -119,6 +120,37 @@ interface Asset {
   notice: string;
   supply: string;
   units: string;
+}
+
+interface HouseholdPerson {
+  personId: string;
+  householdId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: "primary" | "authorized_signer" | "beneficiary" | "trustee" | "co_trustee";
+  status: "active" | "inactive";
+}
+
+interface HouseholdAccount {
+  accountId: string;
+  householdId: string;
+  primaryPersonId: string;
+  accountNumber: string;
+  accountType: "individual" | "joint" | "trust" | "ira" | "roth_ira" | "entity";
+  custodian: string;
+  authorizedSignerIds: string[];
+  status: "active" | "inactive";
+}
+
+interface HouseholdRecord {
+  householdId: string;
+  name: string;
+  primaryContactId: string | null;
+  notes: string;
+  status: "active" | "inactive";
+  createdAt: string;
 }
 
 const trades: Trade[] = [
@@ -249,6 +281,30 @@ const alerts = [
   { severity: "Low", entity: "pbp_legacy", issue: "Broker profile is disconnected", status: "Open", owner: "Integrations", created: "3 hours ago" },
 ];
 
+const households: HouseholdRecord[] = [
+  { householdId: "hh_001", name: "Chen Family Trust", primaryContactId: "per_001", notes: "Multi-asset family trust with active private equity positions", status: "active", createdAt: "Jan 12, 2026" },
+  { householdId: "hh_002", name: "Walsh Capital Group", primaryContactId: "per_003", notes: "Institutional-style family office with multiple accounts", status: "active", createdAt: "Feb 3, 2026" },
+  { householdId: "hh_003", name: "Reed & Associates LLC", primaryContactId: "per_005", notes: "Entity account with trust structure for alternative investments", status: "active", createdAt: "Mar 17, 2026" },
+  { householdId: "hh_004", name: "Kim Foundation", primaryContactId: null, notes: "Foundation account — onboarding pending primary contact", status: "inactive", createdAt: "Apr 22, 2026" },
+];
+
+const householdPersons: HouseholdPerson[] = [
+  { personId: "per_001", householdId: "hh_001", firstName: "Sarah", lastName: "Chen", email: "sarah.chen@example.com", phone: "+1 (415) 555-0101", role: "primary", status: "active" },
+  { personId: "per_002", householdId: "hh_001", firstName: "Michael", lastName: "Chen", email: "m.chen@example.com", phone: "+1 (415) 555-0102", role: "authorized_signer", status: "active" },
+  { personId: "per_003", householdId: "hh_002", firstName: "Nina", lastName: "Walsh", email: "nina.walsh@example.com", phone: "+1 (212) 555-0201", role: "primary", status: "active" },
+  { personId: "per_004", householdId: "hh_002", firstName: "David", lastName: "Walsh", email: "d.walsh@example.com", phone: "+1 (212) 555-0202", role: "trustee", status: "active" },
+  { personId: "per_005", householdId: "hh_003", firstName: "Carlos", lastName: "Reed", email: "carlos.reed@example.com", phone: "+1 (312) 555-0301", role: "primary", status: "active" },
+  { personId: "per_006", householdId: "hh_003", firstName: "Maya", lastName: "Reed", email: "maya.reed@example.com", phone: "+1 (312) 555-0302", role: "co_trustee", status: "active" },
+];
+
+const householdAccounts: HouseholdAccount[] = [
+  { accountId: "acc_001", householdId: "hh_001", primaryPersonId: "per_001", accountNumber: "GS-4492-A", accountType: "trust", custodian: "Goldman Sachs", authorizedSignerIds: ["per_001", "per_002"], status: "active" },
+  { accountId: "acc_002", householdId: "hh_001", primaryPersonId: "per_001", accountNumber: "MSALT-7721", accountType: "individual", custodian: "Morgan Stanley", authorizedSignerIds: ["per_001"], status: "active" },
+  { accountId: "acc_003", householdId: "hh_002", primaryPersonId: "per_003", accountNumber: "JPM-3310-B", accountType: "joint", custodian: "JP Morgan", authorizedSignerIds: ["per_003", "per_004"], status: "active" },
+  { accountId: "acc_004", householdId: "hh_002", primaryPersonId: "per_003", accountNumber: "ICAP-8854", accountType: "entity", custodian: "iCapital", authorizedSignerIds: ["per_003"], status: "active" },
+  { accountId: "acc_005", householdId: "hh_003", primaryPersonId: "per_005", accountNumber: "SCHWAB-1190", accountType: "trust", custodian: "Schwab", authorizedSignerIds: ["per_005", "per_006"], status: "active" },
+];
+
 const tradeGridClass = "grid-cols-[1.15fr_1.2fr_1.25fr_1.25fr_0.8fr_0.95fr_1fr]";
 
 function toneFor(value: string): StatusTone {
@@ -329,6 +385,7 @@ const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ 
   { key: "assets", label: "Private Assets", icon: Briefcase },
   { key: "workflows", label: "Workflows", icon: ListChecks },
   { key: "documents", label: "Documents", icon: FileText },
+  { key: "households", label: "Contacts", icon: Users },
   { key: "execution", label: "Execution Flow", icon: CheckCircle2 },
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "activity", label: "Activity", icon: Activity },
@@ -1948,6 +2005,313 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+function Households() {
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState(households[0]?.householdId ?? "");
+  const [householdPanel, setHouseholdPanel] = useState<"create" | "person" | "account" | null>(null);
+  const selectedHousehold = households.find((h) => h.householdId === selectedHouseholdId) ?? households[0];
+  const primaryContact = householdPersons.find((p) => p.personId === selectedHousehold.primaryContactId);
+  const personsInHousehold = householdPersons.filter((p) => p.householdId === selectedHousehold.householdId);
+  const accountsInHousehold = householdAccounts.filter((a) => a.householdId === selectedHousehold.householdId);
+
+  return (
+    <>
+      <PageTitle
+        title="Contacts"
+        subtitle="Households, persons, and accounts associated with private asset trading"
+        action={
+          <button onClick={() => setHouseholdPanel("create")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
+            <Plus className="h-3.5 w-3.5" />New Household
+          </button>
+        }
+      />
+      <Toolbar placeholder="Search household, person, account, custodian, or status..." />
+      <div className="grid grid-cols-[0.85fr_1.5fr] gap-5">
+        <ShellCard className="overflow-hidden">
+          <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+            <h2 className="text-sm font-semibold text-slate-100">Households</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Each household groups persons and accounts for private asset trading.</p>
+          </div>
+          <div className="divide-y divide-slate-800/80">
+            {households.map((hh) => {
+              const isSelected = hh.householdId === selectedHousehold.householdId;
+              const persons = householdPersons.filter((p) => p.householdId === hh.householdId);
+              const accounts = householdAccounts.filter((a) => a.householdId === hh.householdId);
+              const primary = householdPersons.find((p) => p.personId === hh.primaryContactId);
+              return (
+                <button
+                  key={hh.householdId}
+                  onClick={() => setSelectedHouseholdId(hh.householdId)}
+                  className={`w-full px-5 py-4 text-left transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-100">{hh.name}</h3>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{primary ? `${primary.firstName} ${primary.lastName}` : "No primary contact"}</p>
+                    </div>
+                    <StatusBadge value={hh.status} tone={hh.status === "active" ? "green" : "gray"} />
+                  </div>
+                  <div className="mt-2.5 flex gap-3 text-[11px] text-slate-500">
+                    <span><span className="font-semibold text-slate-300">{persons.length}</span> persons</span>
+                    <span><span className="font-semibold text-slate-300">{accounts.length}</span> accounts</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ShellCard>
+
+        <div className="space-y-5">
+          <ShellCard className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{selectedHousehold.name}</h2>
+                <p className="mt-1 text-xs text-slate-500">{selectedHousehold.notes}</p>
+              </div>
+              <StatusBadge value={selectedHousehold.status} tone={selectedHousehold.status === "active" ? "green" : "gray"} />
+            </div>
+            <div className="mt-5 grid grid-cols-4 gap-3">
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Primary contact</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName}` : "Not assigned"}</p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Persons</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{personsInHousehold.length}</p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Accounts</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{accountsInHousehold.length}</p>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <p className="text-[8px] font-semibold text-slate-600">Created</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{selectedHousehold.createdAt}</p>
+              </div>
+            </div>
+          </ShellCard>
+
+          <ShellCard className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">Persons</h2>
+                <p className="mt-1 text-[11px] text-slate-500">Members, signers, and trustees associated with this household.</p>
+              </div>
+              <button onClick={() => setHouseholdPanel("person")} className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
+                <Plus className="h-3 w-3" />Add
+              </button>
+            </div>
+            <div className="grid grid-cols-[1.4fr_1fr_1fr_0.8fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+              <span>Person</span>
+              <span>Email</span>
+              <span>Phone</span>
+              <span>Role</span>
+              <span>Status</span>
+            </div>
+            <div className="divide-y divide-slate-800/80">
+              {personsInHousehold.length === 0 ? (
+                <p className="px-5 py-4 text-xs text-slate-500">No persons added yet.</p>
+              ) : personsInHousehold.map((person) => (
+                <div key={person.personId} className="grid grid-cols-[1.4fr_1fr_1fr_0.8fr_0.65fr] items-center px-5 py-3.5 text-sm">
+                  <span>
+                    <span className="block font-semibold text-slate-100">{person.firstName} {person.lastName}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">{person.personId}</span>
+                  </span>
+                  <span className="text-xs text-slate-300">{person.email}</span>
+                  <span className="text-xs text-slate-400">{person.phone}</span>
+                  <span><StatusBadge value={displayLabel(person.role)} tone="gray" /></span>
+                  <span><StatusBadge value={person.status} tone={person.status === "active" ? "green" : "gray"} /></span>
+                </div>
+              ))}
+            </div>
+          </ShellCard>
+
+          <ShellCard className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">Accounts</h2>
+                <p className="mt-1 text-[11px] text-slate-500">Custodian accounts linked to this household with their authorized signers.</p>
+              </div>
+              <button onClick={() => setHouseholdPanel("account")} className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
+                <Plus className="h-3 w-3" />Add
+              </button>
+            </div>
+            <div className="grid grid-cols-[1fr_0.9fr_1fr_1.3fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+              <span>Account number</span>
+              <span>Type</span>
+              <span>Custodian</span>
+              <span>Authorized signers</span>
+              <span>Status</span>
+            </div>
+            <div className="divide-y divide-slate-800/80">
+              {accountsInHousehold.length === 0 ? (
+                <p className="px-5 py-4 text-xs text-slate-500">No accounts added yet.</p>
+              ) : accountsInHousehold.map((account) => {
+                const signers = account.authorizedSignerIds.map((id) => householdPersons.find((p) => p.personId === id)).filter(Boolean) as HouseholdPerson[];
+                return (
+                  <div key={account.accountId} className="grid grid-cols-[1fr_0.9fr_1fr_1.3fr_0.65fr] items-center px-5 py-3.5 text-sm">
+                    <span>
+                      <span className="block font-semibold text-slate-100">{account.accountNumber}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">{account.accountId}</span>
+                    </span>
+                    <span><StatusBadge value={displayLabel(account.accountType)} tone="blue" /></span>
+                    <span className="text-xs text-slate-300">{account.custodian}</span>
+                    <span>
+                      <div className="flex flex-wrap gap-1">
+                        {signers.map((signer) => (
+                          <span key={signer.personId} className="inline-flex items-center rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300">
+                            {signer.firstName} {signer.lastName}
+                          </span>
+                        ))}
+                      </div>
+                    </span>
+                    <span><StatusBadge value={account.status} tone={account.status === "active" ? "green" : "gray"} /></span>
+                  </div>
+                );
+              })}
+            </div>
+          </ShellCard>
+        </div>
+      </div>
+      {householdPanel === "create" && <CreateHouseholdPanel onClose={() => setHouseholdPanel(null)} />}
+      {householdPanel === "person" && <AddPersonPanel household={selectedHousehold} onClose={() => setHouseholdPanel(null)} />}
+      {householdPanel === "account" && <AddAccountPanel household={selectedHousehold} persons={personsInHousehold} onClose={() => setHouseholdPanel(null)} />}
+    </>
+  );
+}
+
+function CreateHouseholdPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <DetailPanel title="Create Household" subtitle="Register a new household to group persons and accounts" onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Household details</h3>
+          <div className="mt-4 space-y-3">
+            <FormField label="Household name">
+              <input className={compactInputClass} placeholder="Chen Family Trust" />
+            </FormField>
+            <FormField label="Notes">
+              <input className={compactInputClass} placeholder="Brief description of the household" />
+            </FormField>
+          </div>
+        </ShellCard>
+        <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 text-xs text-slate-400">
+          After creating the household, add persons and link accounts. The primary contact is set from an existing person.
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Create Household</button>
+        </div>
+      </div>
+    </DetailPanel>
+  );
+}
+
+function AddPersonPanel({ household, onClose }: { household: HouseholdRecord; onClose: () => void }) {
+  return (
+    <DetailPanel title="Add Person" subtitle={`Add a member to ${household.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Personal info</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="First name">
+              <input className={compactInputClass} placeholder="Sarah" />
+            </FormField>
+            <FormField label="Last name">
+              <input className={compactInputClass} placeholder="Chen" />
+            </FormField>
+            <FormField label="Email">
+              <input className={compactInputClass} placeholder="sarah@example.com" />
+            </FormField>
+            <FormField label="Phone">
+              <input className={compactInputClass} placeholder="+1 (415) 555-0100" />
+            </FormField>
+          </div>
+          <div className="mt-3">
+            <FormField label="Role in household">
+              <select className={compactInputClass}>
+                <option value="primary">Primary contact</option>
+                <option value="authorized_signer">Authorized signer</option>
+                <option value="beneficiary">Beneficiary</option>
+                <option value="trustee">Trustee</option>
+                <option value="co_trustee">Co-trustee</option>
+              </select>
+            </FormField>
+          </div>
+        </ShellCard>
+        <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 text-xs text-slate-400">
+          Authorized signers can be linked to accounts in this household. Only one person should be set as the primary contact.
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Person</button>
+        </div>
+      </div>
+    </DetailPanel>
+  );
+}
+
+function AddAccountPanel({ household, persons, onClose }: { household: HouseholdRecord; persons: HouseholdPerson[]; onClose: () => void }) {
+  return (
+    <DetailPanel title="Add Account" subtitle={`Link an account to ${household.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Account details</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="Account number">
+              <input className={compactInputClass} placeholder="GS-4492-A" />
+            </FormField>
+            <FormField label="Account type">
+              <select className={compactInputClass}>
+                <option value="individual">Individual</option>
+                <option value="joint">Joint</option>
+                <option value="trust">Trust</option>
+                <option value="ira">IRA</option>
+                <option value="roth_ira">Roth IRA</option>
+                <option value="entity">Entity</option>
+              </select>
+            </FormField>
+            <FormField label="Custodian">
+              <select className={compactInputClass}>
+                <option>Goldman Sachs</option>
+                <option>Morgan Stanley</option>
+                <option>JP Morgan</option>
+                <option>iCapital</option>
+                <option>Schwab</option>
+              </select>
+            </FormField>
+            <FormField label="Primary person">
+              <select className={compactInputClass}>
+                {persons.length === 0
+                  ? <option>No persons added yet</option>
+                  : persons.map((p) => <option key={p.personId} value={p.personId}>{p.firstName} {p.lastName}</option>)
+                }
+              </select>
+            </FormField>
+          </div>
+        </ShellCard>
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Authorized signers</h3>
+          <p className="mt-1 text-xs text-slate-500">Select persons from this household who can sign documents for this account.</p>
+          <div className="mt-3 space-y-2">
+            {persons.length === 0 ? (
+              <p className="text-xs text-slate-500">Add persons to the household first.</p>
+            ) : persons.map((person) => (
+              <label key={person.personId} className="flex cursor-pointer items-center gap-2.5 rounded-md border border-slate-800 px-3 py-2.5 text-xs text-slate-300">
+                <input type="checkbox" className="h-3.5 w-3.5 accent-sky-500" defaultChecked={person.role === "primary" || person.role === "authorized_signer"} />
+                <span className="font-semibold">{person.firstName} {person.lastName}</span>
+                <StatusBadge value={displayLabel(person.role)} tone="gray" />
+              </label>
+            ))}
+          </div>
+        </ShellCard>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Account</button>
+        </div>
+      </div>
+    </DetailPanel>
+  );
+}
+
 export default function PatsPlatform() {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
@@ -1964,6 +2328,7 @@ export default function PatsPlatform() {
       case "assets": return <PrivateAssets />;
       case "workflows": return <Workflows />;
       case "documents": return <Documents />;
+      case "households": return <Households />;
       case "execution": return <Execution />;
       case "integrations": return <Integrations />;
       case "activity": return <ActivityLog />;
