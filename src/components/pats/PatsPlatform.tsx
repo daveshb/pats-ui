@@ -227,6 +227,24 @@ const tradeDocuments: TradeDoc[] = [
   { tradeDocumentId: "tdoc_005", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sub_002", workflowRequirementId: "wr_icap_sub", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", name: "iCapital Subscription Package", type: "subscription_agreement", platform: "icapital", source: "external_platform", status: "uploaded", fileKey: "icap/tdoc_005/subscription.pdf", createdAt: "2026-05-01T07:30:00Z", updatedAt: "2026-05-01T13:00:00Z" },
 ];
 
+const workflowSteps = [
+  { tradeWorkflowStepId: "tws_doc_001", tradeWorkflowId: "tw_001", inboundTradeId: "it_d672e1c1", name: "Subscription documents" },
+  { tradeWorkflowStepId: "tws_sig_001", tradeWorkflowId: "tw_001", inboundTradeId: "it_d672e1c1", name: "Investor signature" },
+  { tradeWorkflowStepId: "tws_notice_001", tradeWorkflowId: "tw_002", inboundTradeId: "it_cb41f317", name: "Redemption notice upload" },
+  { tradeWorkflowStepId: "tws_tax_001", tradeWorkflowId: "tw_004", inboundTradeId: "it_a71e6d82", name: "Tax package collection" },
+  { tradeWorkflowStepId: "tws_sub_002", tradeWorkflowId: "tw_005", inboundTradeId: "it_7bd6a44f", name: "iCapital subscription" },
+];
+
+const workflowRequirements = [
+  { workflowRequirementId: "wr_subscription_agreement", name: "Subscription agreement" },
+  { workflowRequirementId: "wr_investor_signature", name: "Investor signature" },
+  { workflowRequirementId: "wr_redemption_notice", name: "Redemption notice" },
+  { workflowRequirementId: "wr_tax_package", name: "Tax package" },
+  { workflowRequirementId: "wr_icap_sub", name: "iCapital subscription package" },
+  { workflowRequirementId: "wr_accreditation", name: "Investor accreditation letter" },
+  { workflowRequirementId: "wr_kyc_docs", name: "KYC documentation" },
+];
+
 const workflowReviewChecks = [
   { group: "Intake requirements", checks: ["Broker selected", "Ticker must resolve", "Private asset must be active"], status: "Active", action: "Applies before routing" },
   { group: "Asset rules", checks: ["Supply available", "Lock-up allowed", "Notice period checked"], status: "Active", action: "Configured per asset" },
@@ -1582,9 +1600,57 @@ function Documents() {
 }
 
 function AddDocumentPanel({ onClose }: { onClose: () => void }) {
+  const [selectedTradeId, setSelectedTradeId] = useState("");
+  const stepsForTrade = selectedTradeId
+    ? workflowSteps.filter((s) => s.inboundTradeId === selectedTradeId)
+    : workflowSteps;
+  const selectedTrade = trades.find((t) => t.inboundTradeId === selectedTradeId);
+
   return (
     <DetailPanel title="Add Document" subtitle="POST /documents — register a new document requirement for a workflow step" onClose={onClose}>
       <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Workflow context</h3>
+          <p className="mt-1 text-xs text-slate-500">Links this document to an inbound trade and a specific workflow step.</p>
+          <div className="mt-4 space-y-3">
+            <FormField label="Inbound trade">
+              <select className={compactInputClass} value={selectedTradeId} onChange={(e) => setSelectedTradeId(e.target.value)}>
+                <option value="">— Select inbound trade —</option>
+                {trades.map((t) => (
+                  <option key={t.inboundTradeId} value={t.inboundTradeId}>
+                    {t.ticker} · {t.broker} · {t.type}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            {selectedTrade && (
+              <div className="rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-500">
+                Trade <span className="text-slate-400">{selectedTrade.inboundTradeId}</span> · {selectedTrade.asset} · <StatusBadge value={selectedTrade.status} />
+              </div>
+            )}
+            <FormField label="Workflow step">
+              <select className={compactInputClass} disabled={stepsForTrade.length === 0}>
+                <option value="">— Select step —</option>
+                {stepsForTrade.map((s) => (
+                  <option key={s.tradeWorkflowStepId} value={s.tradeWorkflowStepId}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Workflow requirement">
+              <select className={compactInputClass}>
+                <option value="">— Select requirement —</option>
+                {workflowRequirements.map((r) => (
+                  <option key={r.workflowRequirementId} value={r.workflowRequirementId}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+        </ShellCard>
+
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Document identity</h3>
           <div className="mt-4 space-y-3">
@@ -1624,31 +1690,8 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
         </ShellCard>
 
         <ShellCard className="p-4">
-          <h3 className="text-sm font-semibold text-white">Workflow context</h3>
-          <p className="mt-1 text-xs text-slate-500">Links this document to an inbound trade and workflow step. Required by the backend.</p>
-          <div className="mt-4 space-y-3">
-            <FormField label="Inbound trade">
-              <select className={compactInputClass}>
-                <option value="">— Select inbound trade —</option>
-                {trades.map((t) => (
-                  <option key={t.inboundTradeId} value={t.inboundTradeId}>
-                    {t.inboundTradeId} · {t.ticker} · {t.broker}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Trade workflow step ID">
-              <input className={compactInputClass} placeholder="tws_xxxxx" />
-            </FormField>
-            <FormField label="Workflow requirement ID">
-              <input className={compactInputClass} placeholder="wr_xxxxx" />
-            </FormField>
-          </div>
-        </ShellCard>
-
-        <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Optional context</h3>
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-2 gap-3">
             <FormField label="Broker">
               <select className={compactInputClass}>
                 <option value="">— None —</option>
