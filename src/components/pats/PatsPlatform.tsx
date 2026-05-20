@@ -1601,6 +1601,7 @@ function Documents() {
 
 function AddDocumentPanel({ onClose }: { onClose: () => void }) {
   const [selectedTradeId, setSelectedTradeId] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState("manual_upload");
   const stepsForTrade = selectedTradeId
     ? workflowSteps.filter((s) => s.inboundTradeId === selectedTradeId)
     : workflowSteps;
@@ -1625,7 +1626,7 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
             </FormField>
             {selectedTrade && (
               <div className="rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-500">
-                Trade <span className="text-slate-400">{selectedTrade.inboundTradeId}</span> · {selectedTrade.asset} · <StatusBadge value={selectedTrade.status} />
+                {selectedTrade.ticker} · {selectedTrade.asset} · {selectedTrade.type} · <StatusBadge value={selectedTrade.status} />
               </div>
             )}
             <FormField label="Workflow step">
@@ -1669,7 +1670,7 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
                 </select>
               </FormField>
               <FormField label="Platform">
-                <select className={compactInputClass}>
+                <select className={compactInputClass} value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)}>
                   <option value="manual_upload">Manual upload</option>
                   <option value="docusign">DocuSign</option>
                   <option value="icapital">iCapital</option>
@@ -1677,6 +1678,14 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
                   <option value="other">Other</option>
                 </select>
               </FormField>
+              {selectedPlatform === "manual_upload" && (
+                <FormField label="File">
+                  <label className={`${compactInputClass} flex cursor-pointer items-center gap-2 text-slate-400`}>
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg" />
+                    <span className="text-[10px]">Choose file...</span>
+                  </label>
+                </FormField>
+              )}
               <FormField label="Source">
                 <select className={compactInputClass}>
                   <option value="ops">Ops</option>
@@ -1710,11 +1719,6 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
             </FormField>
           </div>
         </ShellCard>
-
-        <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 font-mono text-[10px] text-slate-500">
-          <span className="text-sky-400">POST</span> /documents<br />
-          <span className="text-slate-600">→ returns TradeDocumentResponse with tradeDocumentId (tdoc_xxx)</span>
-        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
