@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -32,6 +32,14 @@ import {
   Users,
   X,
 } from "lucide-react";
+
+function loadLocal<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try { const s = localStorage.getItem(key); return s ? (JSON.parse(s) as T) : fallback; } catch { return fallback; }
+}
+function saveLocal<T>(key: string, value: T) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
 
 type NavKey =
   | "dashboard"
@@ -218,6 +226,7 @@ const workflows = [
   { id: "wt_health_redemption", policy: "every_trade", name: "HealthTech redemption workflow", type: "Redemption", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", broker: "Morgan Stanley Alternatives", asset: "HealthTech Preferred", status: "active", requirements: "5 requirements", updated: "38 min ago", focus: "Notice period, liquidity review, broker approval", requirementTypes: ["notice_period_check", "liquidity_check", "document", "approval", "manual_review"] },
   { id: "wt_fintech_subscription", policy: "once_per_user", name: "FinTech iCapital package", type: "Approval", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", broker: "iCapital Marketplace", asset: "FinTech Growth", status: "active", requirements: "3 requirements", updated: "1 hour ago", focus: "External platform, approval callback, manual review", requirementTypes: ["external_platform", "signature", "manual_review"] },
 ];
+type WorkflowRecord = typeof workflows[number];
 
 const tradeDocuments: TradeDoc[] = [
   { tradeDocumentId: "tdoc_001", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_doc_001", workflowRequirementId: "wr_subscription_agreement", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", accountId: "acct-456", name: "Subscription Agreement", type: "subscription_agreement", platform: "docusign", source: "ops", status: "sent", externalEnvelopeId: "DS-44912", sentAt: "2026-05-01T14:30:00Z", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T14:30:00Z" },
@@ -785,7 +794,34 @@ function TradeRow({ trade, compact = false, onClick }: { trade: Trade; compact?:
   );
 }
 
-function Trades({ openNewTrade, openTrade }: { openNewTrade: () => void; openTrade: (trade: Trade) => void }) {
+function Trades({ trades: localTrades, openNewTrade, openTrade }: { trades: Trade[]; openNewTrade: () => void; openTrade: (trade: Trade) => void }) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusDropOpen, setStatusDropOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [brokerFilter, setBrokerFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  const uniqueBrokers = Array.from(new Set(localTrades.map(t => t.broker)));
+  const statuses = ["all", "validated", "workflow_required", "unresolved", "needs_review"];
+  const filtered = localTrades.filter(t => {
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (brokerFilter !== "all" && t.broker !== brokerFilter) return false;
+    if (typeFilter !== "all" && t.type !== typeFilter) return false;
+    return true;
+  });
+
+  const activeFilters = [brokerFilter !== "all", typeFilter !== "all"].filter(Boolean).length;
+
+  const exportCSV = () => {
+    const header = ["ID", "Type", "Broker", "Ticker", "Asset", "Quantity", "Amount", "Status", "Workflow", "Time"].join(",");
+    const rows = filtered.map(t => [t.id, t.type, `"${t.broker}"`, t.ticker, `"${t.asset}"`, t.quantity, t.amount, t.status, t.workflowReason, t.time].join(","));
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "pats-trades.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <>
       <PageTitle
@@ -794,14 +830,47 @@ function Trades({ openNewTrade, openTrade }: { openNewTrade: () => void; openTra
         action={<button onClick={openNewTrade} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />New Manual Trade</button>}
       />
       <Toolbar placeholder="Search trade, ticker, broker, private asset, investor, or workflow status...">
-        <button className="rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">All Status</button>
-        <button className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200"><Filter className="h-4 w-4" />Filters</button>
-        <button className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200"><Download className="h-4 w-4" />Export</button>
+        <div className="relative">
+          <button onClick={() => setStatusDropOpen(v => !v)} className="h-9 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">
+            {statusFilter === "all" ? "All Status" : displayLabel(statusFilter)}
+          </button>
+          {statusDropOpen && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-slate-800 bg-[#0d1015] shadow-xl">
+              {statuses.map(s => (
+                <button key={s} onClick={() => { setStatusFilter(s); setStatusDropOpen(false); }}
+                  className={`block w-full px-3 py-2 text-left text-xs hover:bg-slate-800/60 ${statusFilter === s ? "font-semibold text-sky-400" : "text-slate-300"}`}>
+                  {s === "all" ? "All Status" : displayLabel(s)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button onClick={() => setShowFilters(v => !v)} className={`flex h-9 items-center gap-2 rounded-lg border px-4 text-sm transition ${showFilters ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-200"}`}>
+          <Filter className="h-4 w-4" />Filters
+          {activeFilters > 0 && <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[9px] font-bold text-white">{activeFilters}</span>}
+        </button>
+        <button onClick={exportCSV} className="flex h-9 items-center gap-2 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200"><Download className="h-4 w-4" />Export</button>
       </Toolbar>
+      {showFilters && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0d1015] px-4 py-3">
+          <span className="text-[10px] font-semibold text-slate-500">FILTER BY</span>
+          <select value={brokerFilter} onChange={e => setBrokerFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
+            <option value="all">All brokers</option>
+            {uniqueBrokers.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
+            <option value="all">All types</option>
+            {["Buy", "Sell", "Subscribe", "Redeem"].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          {activeFilters > 0 && <button onClick={() => { setBrokerFilter("all"); setTypeFilter("all"); }} className="ml-auto text-xs text-rose-400 hover:text-rose-300">Clear filters</button>}
+        </div>
+      )}
       <ShellCard className="overflow-hidden">
         <TradeTableHeader />
         <div className="space-y-px">
-          {trades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => openTrade(trade)} />)}
+          {filtered.length === 0
+            ? <p className="px-5 py-6 text-xs text-slate-500">No trades match the current filters.</p>
+            : filtered.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => openTrade(trade)} />)}
         </div>
       </ShellCard>
     </>
@@ -831,16 +900,47 @@ function TradeTableHeader() {
 }
 
 function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
+  const [showFilters, setShowFilters] = useState(false);
+  const [brokerFilter, setBrokerFilter] = useState("all");
+  const [resultFilter, setResultFilter] = useState("all");
+
+  const uniqueBrokers = Array.from(new Set(externalTrades.map(t => t.broker)));
+  const filtered = externalTrades.filter(t => {
+    if (brokerFilter !== "all" && t.broker !== brokerFilter) return false;
+    if (resultFilter !== "all" && t.validation !== resultFilter) return false;
+    return true;
+  });
+  const activeFilters = [brokerFilter !== "all", resultFilter !== "all"].filter(Boolean).length;
+
   return (
     <>
       <PageTitle title="Inbound Blotter" subtitle="Trades received from Vantage and what PATS decided for each one" />
       <Toolbar placeholder="Search source, broker, ticker, private asset, PATS result, or received time...">
-        <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
+        <button onClick={() => setShowFilters(v => !v)} className={`flex h-9 items-center gap-2 rounded-md border px-3.5 text-xs font-semibold transition ${showFilters ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-200"}`}>
+          <Filter className="h-3.5 w-3.5" />Filters
+          {activeFilters > 0 && <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[9px] font-bold text-white">{activeFilters}</span>}
+        </button>
       </Toolbar>
+      {showFilters && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0d1015] px-4 py-3">
+          <span className="text-[10px] font-semibold text-slate-500">FILTER BY</span>
+          <select value={brokerFilter} onChange={e => setBrokerFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
+            <option value="all">All brokers</option>
+            {uniqueBrokers.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={resultFilter} onChange={e => setResultFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
+            <option value="all">All results</option>
+            <option value="validated">Validated</option>
+            <option value="workflow_required">Workflow required</option>
+            <option value="unresolved">Unresolved</option>
+          </select>
+          {activeFilters > 0 && <button onClick={() => { setBrokerFilter("all"); setResultFilter("all"); }} className="ml-auto text-xs text-rose-400 hover:text-rose-300">Clear filters</button>}
+        </div>
+      )}
       <ShellCard className="overflow-hidden">
         <TableHeader columns={["Source", "Broker", "Ticker received", "Matched asset", "PATS result", "Next action", "Received"]} />
         <div className="divide-y divide-slate-800/80">
-          {externalTrades.map((item) => (
+          {filtered.map((item) => (
             <button key={item.externalId} onClick={() => openItem(item.externalId)} className="grid w-full grid-cols-7 items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
               <span className="text-xs font-medium text-sky-300">Vantage</span>
               <span className="text-xs text-slate-300">{item.broker}</span>
@@ -851,13 +951,14 @@ function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
               <span className="text-xs text-slate-500">{item.received}</span>
             </button>
           ))}
+          {filtered.length === 0 && <p className="px-5 py-4 text-xs text-slate-500">No trades match the current filters.</p>}
         </div>
       </ShellCard>
     </>
   );
 }
 
-function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
+function Brokers({ brokers: localBrokers, updateBroker, openNewBroker }: { brokers: Broker[]; updateBroker: (id: string, p: Partial<Broker>) => void; openNewBroker: () => void }) {
   const [expandedBroker, setExpandedBroker] = useState<string | null>(null);
 
   return (
@@ -866,21 +967,14 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
       <Toolbar placeholder="Search broker, workflow owner, fill return, asset, or ticker..." />
       <ShellCard className="overflow-hidden">
         <div className="grid grid-cols-[1.55fr_0.7fr_1fr_1.05fr_0.55fr_0.55fr_0.55fr_0.35fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
-          <span>Broker</span>
-          <span>Status</span>
-          <span>Workflow owner</span>
-          <span>Fill return</span>
-          <span className="text-right">Assets</span>
-          <span className="text-right">Tickers</span>
-          <span className="text-right">Trades</span>
-          <span />
+          <span>Broker</span><span>Status</span><span>Workflow owner</span><span>Fill return</span>
+          <span className="text-right">Assets</span><span className="text-right">Tickers</span><span className="text-right">Trades</span><span />
         </div>
         <div className="divide-y divide-slate-800/90">
-          {brokers.map((broker) => {
+          {localBrokers.map((broker) => {
             const isOpen = expandedBroker === broker.name;
             const brokerAssets = assets.filter((asset) => asset.broker === broker.name);
             const brokerWorkflows = workflows.filter((workflow) => workflow.broker === broker.name);
-
             return (
               <div key={broker.name}>
                 <button
@@ -914,6 +1008,23 @@ function Brokers({ openNewBroker }: { openNewBroker: () => void }) {
                           <Info label="Workflow rules" value={brokerWorkflows.length.toString()} />
                           <Info label="Workflow owner" value={broker.workflowOwner} />
                           <Info label="Fill return" value={broker.fillReturn} />
+                        </div>
+                        <div className="mt-4">
+                          {broker.status === "Active" ? (
+                            <button
+                              onClick={() => updateBroker(broker.patsBrokerProfileId, { status: "Disconnected" })}
+                              className="flex h-8 items-center gap-1.5 rounded-md border border-rose-400/30 bg-rose-400/10 px-3 text-xs font-semibold text-rose-300 hover:bg-rose-400/20"
+                            >
+                              Disable broker
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => updateBroker(broker.patsBrokerProfileId, { status: "Active" })}
+                              className="flex h-8 items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20"
+                            >
+                              Re-enable broker
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -955,26 +1066,49 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function PrivateAssets() {
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [brokerFilter, setBrokerFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const uniqueBrokers = Array.from(new Set(assets.map(a => a.broker)));
+  const filteredAssets = assets.filter(a => {
+    if (brokerFilter !== "all" && a.broker !== brokerFilter) return false;
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    return true;
+  });
+  const activeFilters = [brokerFilter !== "all", statusFilter !== "all"].filter(Boolean).length;
 
   return (
     <>
       <PageTitle title="Private Assets" subtitle="Investment products owned by brokers, with their tickers, terms, documents, and workflow rules" />
       <Toolbar placeholder="Search asset, broker, ticker, sponsor, document platform, or workflow rule...">
-        <button className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-3.5 text-xs font-semibold text-slate-200"><Filter className="h-3.5 w-3.5" />Filters</button>
+        <button onClick={() => setShowFilters(v => !v)} className={`flex h-9 items-center gap-2 rounded-md border px-3.5 text-xs font-semibold transition ${showFilters ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-200"}`}>
+          <Filter className="h-3.5 w-3.5" />Filters
+          {activeFilters > 0 && <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[9px] font-bold text-white">{activeFilters}</span>}
+        </button>
       </Toolbar>
+      {showFilters && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0d1015] px-4 py-3">
+          <span className="text-[10px] font-semibold text-slate-500">FILTER BY</span>
+          <select value={brokerFilter} onChange={e => setBrokerFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
+            <option value="all">All brokers</option>
+            {uniqueBrokers.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="restricted">Restricted</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          {activeFilters > 0 && <button onClick={() => { setBrokerFilter("all"); setStatusFilter("all"); }} className="ml-auto text-xs text-rose-400 hover:text-rose-300">Clear filters</button>}
+        </div>
+      )}
       <ShellCard className="overflow-hidden">
         <div className="grid grid-cols-[1.45fr_1.05fr_0.65fr_0.7fr_1fr_0.9fr_1.1fr_0.35fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
-          <span>Asset</span>
-          <span>Broker</span>
-          <span>Ticker</span>
-          <span>Status</span>
-          <span>Terms</span>
-          <span>Documents</span>
-          <span>Workflow rule</span>
-          <span />
+          <span>Asset</span><span>Broker</span><span>Ticker</span><span>Status</span><span>Terms</span><span>Documents</span><span>Workflow rule</span><span />
         </div>
         <div className="divide-y divide-slate-800/90">
-          {assets.map((asset) => {
+          {filteredAssets.map((asset) => {
             const isOpen = expandedAsset === asset.ticker;
             const workflow = workflows.find((flow) => flow.privateAssetId === asset.privateAssetId);
             const workflowLabel = workflow ? displayLabel(workflow.policy) : "No workflow";
@@ -1047,6 +1181,7 @@ function PrivateAssets() {
               </div>
             );
           })}
+          {filteredAssets.length === 0 && <p className="px-5 py-6 text-xs text-slate-500">No assets match the current filters.</p>}
         </div>
       </ShellCard>
     </>
@@ -1131,12 +1266,12 @@ function WorkflowsLegacy() {
   );
 }
 
-function Workflows() {
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState(workflows[0]?.id ?? "");
+function Workflows({ workflows: localWorkflows, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(localWorkflows[0]?.id ?? "");
   const [workflowPanel, setWorkflowPanel] = useState<"template" | "requirement" | null>(null);
-  const selectedWorkflow = workflows.find((flow) => flow.id === selectedWorkflowId) ?? workflows[0];
-  const selectedAsset = assets.find((asset) => asset.privateAssetId === selectedWorkflow.privateAssetId);
-  const selectedRequirements = selectedWorkflow.requirementTypes.map((type, index) => ({
+  const selectedWorkflow = localWorkflows.find((flow) => flow.id === selectedWorkflowId) ?? localWorkflows[0];
+  const selectedAsset = assets.find((asset) => asset.privateAssetId === selectedWorkflow?.privateAssetId);
+  const selectedRequirements = (selectedWorkflow?.requirementTypes ?? []).map((type, index) => ({
     type,
     title: displayLabel(type),
     required: true,
@@ -1164,8 +1299,8 @@ function Workflows() {
             <p className="mt-1 text-[11px] text-slate-500">One active template tells PATS what steps are needed for that broker-owned asset.</p>
           </div>
           <div className="divide-y divide-slate-800/80">
-            {workflows.map((flow) => {
-              const isSelected = flow.id === selectedWorkflow.id;
+            {localWorkflows.map((flow) => {
+              const isSelected = flow.id === selectedWorkflow?.id;
               return (
                 <button
                   key={flow.id}
@@ -1267,13 +1402,41 @@ function Workflows() {
           </ShellCard>
         </div>
       </div>
-      {workflowPanel === "template" && <CreateWorkflowTemplatePanel onClose={() => setWorkflowPanel(null)} />}
-      {workflowPanel === "requirement" && <AddWorkflowRequirementPanel workflow={selectedWorkflow} onClose={() => setWorkflowPanel(null)} />}
+      {workflowPanel === "template" && <CreateWorkflowTemplatePanel onAdd={onAddWorkflow} onClose={() => setWorkflowPanel(null)} />}
+      {workflowPanel === "requirement" && selectedWorkflow && <AddWorkflowRequirementPanel workflow={selectedWorkflow} onUpdate={(types) => onUpdateWorkflow(selectedWorkflow.id, { requirementTypes: types, requirements: `${types.length} requirement${types.length !== 1 ? "s" : ""}` })} onClose={() => setWorkflowPanel(null)} />}
     </>
   );
 }
 
-function CreateWorkflowTemplatePanel({ onClose }: { onClose: () => void }) {
+function CreateWorkflowTemplatePanel({ onAdd, onClose }: { onAdd: (w: WorkflowRecord) => void; onClose: () => void }) {
+  const activeBrokers = brokers.filter(b => b.status === "Active");
+  const [selectedBroker, setSelectedBroker] = useState(activeBrokers[0]?.name ?? "");
+  const [selectedAsset, setSelectedAsset] = useState(assets[0]?.name ?? "");
+  const [templateName, setTemplateName] = useState("");
+  const [policy, setPolicy] = useState<"once_per_user" | "every_trade">("once_per_user");
+
+  const handleCreate = () => {
+    if (!templateName.trim()) return;
+    const broker = brokers.find(b => b.name === selectedBroker);
+    const asset = assets.find(a => a.name === selectedAsset);
+    onAdd({
+      id: `wt_${Date.now()}`,
+      name: templateName.trim(),
+      broker: selectedBroker,
+      asset: selectedAsset,
+      privateAssetId: asset?.privateAssetId ?? "",
+      patsBrokerProfileId: broker?.patsBrokerProfileId ?? "",
+      type: "Subscription",
+      policy,
+      status: "active",
+      focus: `Workflow for ${selectedAsset}`,
+      requirements: "0 requirements",
+      requirementTypes: [],
+      updated: "Just now",
+    });
+    onClose();
+  };
+
   return (
     <DetailPanel title="Create Workflow Template" subtitle="Define the workflow rules for one broker-owned private asset" onClose={onClose}>
       <div className="space-y-4">
@@ -1282,13 +1445,13 @@ function CreateWorkflowTemplatePanel({ onClose }: { onClose: () => void }) {
           <p className="mt-1 text-xs text-slate-500">A workflow template must belong to one broker and one private asset.</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Broker">
-              <select className={compactInputClass}>
-                {brokers.filter((broker) => broker.status === "Active").map((broker) => <option key={broker.patsBrokerProfileId}>{broker.name}</option>)}
+              <select className={compactInputClass} value={selectedBroker} onChange={e => setSelectedBroker(e.target.value)}>
+                {activeBrokers.map(b => <option key={b.patsBrokerProfileId}>{b.name}</option>)}
               </select>
             </FormField>
             <FormField label="Private asset">
-              <select className={compactInputClass}>
-                {assets.map((asset) => <option key={asset.privateAssetId}>{asset.name}</option>)}
+              <select className={compactInputClass} value={selectedAsset} onChange={e => setSelectedAsset(e.target.value)}>
+                {assets.map(a => <option key={a.privateAssetId}>{a.name}</option>)}
               </select>
             </FormField>
           </div>
@@ -1298,13 +1461,10 @@ function CreateWorkflowTemplatePanel({ onClose }: { onClose: () => void }) {
           <h3 className="text-sm font-semibold text-white">Workflow rule</h3>
           <div className="mt-4 space-y-3">
             <FormField label="Template name">
-              <input className={compactInputClass} placeholder="Subscription workflow" />
-            </FormField>
-            <FormField label="Description">
-              <input className={compactInputClass} placeholder="Required documents and approvals before trading" />
+              <input className={compactInputClass} placeholder="Subscription workflow" value={templateName} onChange={e => setTemplateName(e.target.value)} />
             </FormField>
             <FormField label="When should this workflow apply?">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={policy} onChange={e => setPolicy(e.target.value as "once_per_user" | "every_trade")}>
                 <option value="once_per_user">Once per user or account</option>
                 <option value="every_trade">Every trade</option>
               </select>
@@ -1314,14 +1474,23 @@ function CreateWorkflowTemplatePanel({ onClose }: { onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Create Template</button>
+          <button onClick={handleCreate} disabled={!templateName.trim()} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Create Template</button>
         </div>
       </div>
     </DetailPanel>
   );
 }
 
-function AddWorkflowRequirementPanel({ workflow, onClose }: { workflow: typeof workflows[number]; onClose: () => void }) {
+function AddWorkflowRequirementPanel({ workflow, onUpdate, onClose }: { workflow: WorkflowRecord; onUpdate: (types: string[]) => void; onClose: () => void }) {
+  const [reqType, setReqType] = useState("document");
+  const [title, setTitle] = useState("");
+
+  const handleAdd = () => {
+    const key = title.trim() ? title.trim().toLowerCase().replaceAll(" ", "_") : reqType;
+    onUpdate([...workflow.requirementTypes, key]);
+    onClose();
+  };
+
   return (
     <DetailPanel title="Add Requirement" subtitle={`Add a step to ${workflow.name}`} onClose={onClose}>
       <div className="space-y-4">
@@ -1339,7 +1508,7 @@ function AddWorkflowRequirementPanel({ workflow, onClose }: { workflow: typeof w
           <h3 className="text-sm font-semibold text-white">Requirement details</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Type">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={reqType} onChange={e => setReqType(e.target.value)}>
                 <option value="document">Document</option>
                 <option value="signature">Signature</option>
                 <option value="approval">Approval</option>
@@ -1351,28 +1520,19 @@ function AddWorkflowRequirementPanel({ workflow, onClose }: { workflow: typeof w
               </select>
             </FormField>
             <FormField label="Order">
-              <input className={compactInputClass} placeholder="1" />
+              <input className={compactInputClass} value={workflow.requirementTypes.length + 1} readOnly />
             </FormField>
-            <FormField label="Title">
-              <input className={compactInputClass} placeholder="Subscription agreement" />
-            </FormField>
-            <FormField label="Required">
-              <select className={compactInputClass}>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </FormField>
-          </div>
-          <div className="mt-3">
-            <FormField label="Description">
-              <input className={compactInputClass} placeholder="What Ops must complete before the trade moves forward" />
-            </FormField>
+            <div className="col-span-2">
+              <FormField label="Title">
+                <input className={compactInputClass} placeholder="Subscription agreement" value={title} onChange={e => setTitle(e.target.value)} />
+              </FormField>
+            </div>
           </div>
         </ShellCard>
 
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Requirement</button>
+          <button onClick={handleAdd} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Add Requirement</button>
         </div>
       </div>
     </DetailPanel>
@@ -1461,13 +1621,25 @@ function documentPrimaryAction(doc: TradeDoc) {
   return "Open document";
 }
 
-function Documents() {
-  const [selectedDocumentId, setSelectedDocumentId] = useState(tradeDocuments[0]?.tradeDocumentId ?? "");
+function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc: (d: TradeDoc) => void; onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void }) {
+  const [selectedDocumentId, setSelectedDocumentId] = useState(docs[0]?.tradeDocumentId ?? "");
   const [addDocOpen, setAddDocOpen] = useState(false);
-  const selectedDocument = tradeDocuments.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? tradeDocuments[0];
-  const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument.inboundTradeId);
-  const relatedAsset = assets.find((a) => a.privateAssetId === selectedDocument.privateAssetId);
-  const relatedBroker = brokers.find((b) => b.patsBrokerProfileId === selectedDocument.patsBrokerProfileId);
+  const [blockInput, setBlockInput] = useState("");
+  const [showBlockInput, setShowBlockInput] = useState(false);
+  const selectedDocument = docs.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? docs[0];
+  const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument?.inboundTradeId);
+  const relatedAsset = assets.find((a) => a.privateAssetId === selectedDocument?.privateAssetId);
+  const relatedBroker = brokers.find((b) => b.patsBrokerProfileId === selectedDocument?.patsBrokerProfileId);
+
+  if (!selectedDocument) return (
+    <>
+      <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
+        action={<button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />Add Document</button>}
+      />
+      <p className="mt-8 text-center text-xs text-slate-500">No documents yet. Add one to get started.</p>
+      {addDocOpen && <AddDocumentPanel onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
+    </>
+  );
 
   const documentFlow = [
     ["Required", "Workflow step added this document — Ops must fulfill it before the trade can continue"],
@@ -1506,13 +1678,13 @@ function Documents() {
             <span>Next action</span>
           </div>
           <div className="divide-y divide-slate-800/80">
-            {tradeDocuments.map((doc) => {
+            {docs.map((doc) => {
               const isSelected = doc.tradeDocumentId === selectedDocument.tradeDocumentId;
               const docAsset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
               return (
                 <button
                   key={doc.tradeDocumentId}
-                  onClick={() => setSelectedDocumentId(doc.tradeDocumentId)}
+                  onClick={() => { setSelectedDocumentId(doc.tradeDocumentId); setShowBlockInput(false); }}
                   className={`grid w-full grid-cols-[1.3fr_0.85fr_0.75fr_0.65fr_0.95fr] items-center px-5 py-4 text-left text-sm transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
                 >
                   <span>
@@ -1584,33 +1756,87 @@ function Documents() {
 
           <ShellCard className="p-5">
             <h2 className="text-sm font-semibold text-white">Actions</h2>
-            <p className="mt-1 text-xs text-slate-500">These map directly to backend endpoints: <span className="text-slate-400">POST /documents</span>, <span className="text-slate-400">POST /documents/:id/complete</span>, <span className="text-slate-400">POST /documents/:id/block</span>, <span className="text-slate-400">PATCH /documents/:id/status</span></p>
-            <div className="mt-4 grid grid-cols-2 gap-2.5">
-              <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">{documentPrimaryAction(selectedDocument)}</button>
-              <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">Complete document</button>
-              <button className="h-9 rounded-md border border-rose-400/30 bg-rose-400/10 text-xs font-semibold text-rose-300">Block with reason</button>
-              <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400">Cancel document</button>
+            {showBlockInput && (
+              <div className="mt-3 flex gap-2">
+                <input
+                  className="h-9 flex-1 rounded-md border border-rose-400/30 bg-rose-400/5 px-3 text-xs text-rose-200 outline-none placeholder:text-rose-400/40"
+                  placeholder="Reason for blocking..."
+                  value={blockInput}
+                  onChange={e => setBlockInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && blockInput.trim()) { onUpdateDoc(selectedDocument.tradeDocumentId, { status: "blocked", blockedReason: blockInput.trim() }); setShowBlockInput(false); setBlockInput(""); } }}
+                  autoFocus
+                />
+                <button onClick={() => setShowBlockInput(false)} className="h-9 rounded-md border border-slate-800 bg-slate-900 px-3 text-xs text-slate-400">Cancel</button>
+                <button onClick={() => { if (blockInput.trim()) { onUpdateDoc(selectedDocument.tradeDocumentId, { status: "blocked", blockedReason: blockInput.trim() }); setShowBlockInput(false); setBlockInput(""); } }} className="h-9 rounded-md border border-rose-400/50 bg-rose-400/20 px-3 text-xs font-semibold text-rose-300">Confirm</button>
+              </div>
+            )}
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <button
+                className={`h-9 rounded-md border text-xs font-semibold ${selectedDocument.platform === "manual_upload" ? "border-slate-800 bg-slate-900 text-slate-400 opacity-50 cursor-not-allowed" : "border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800"}`}
+                disabled={selectedDocument.platform === "manual_upload"}
+                onClick={() => alert(`Opening ${displayLabel(selectedDocument.platform)}...`)}
+              >{documentPrimaryAction(selectedDocument)}</button>
+              <button
+                disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
+                onClick={() => onUpdateDoc(selectedDocument.tradeDocumentId, { status: "completed", completedAt: new Date().toISOString() })}
+                className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30 disabled:opacity-40"
+              >Complete document</button>
+              <button
+                disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
+                onClick={() => setShowBlockInput(v => !v)}
+                className={`h-9 rounded-md border text-xs font-semibold disabled:opacity-40 ${showBlockInput ? "border-rose-400/50 bg-rose-400/20 text-rose-300" : "border-rose-400/30 bg-rose-400/10 text-rose-300"}`}
+              >{showBlockInput ? "Cancel block" : "Block with reason"}</button>
+              <button
+                disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
+                onClick={() => { onUpdateDoc(selectedDocument.tradeDocumentId, { status: "cancelled" }); setShowBlockInput(false); }}
+                className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400 disabled:opacity-40"
+              >Cancel document</button>
             </div>
           </ShellCard>
         </div>
       </div>
-      {addDocOpen && <AddDocumentPanel onClose={() => setAddDocOpen(false)} />}
+      {addDocOpen && <AddDocumentPanel onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
     </>
   );
 }
 
-function AddDocumentPanel({ onClose }: { onClose: () => void }) {
+function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; onClose: () => void }) {
   const [selectedTradeId, setSelectedTradeId] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("manual_upload");
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [docName, setDocName] = useState("");
+  const [docType, setDocType] = useState<TradeDoc["type"]>("subscription_agreement");
+  const [selectedStepId, setSelectedStepId] = useState("");
+  const [selectedReqId, setSelectedReqId] = useState("");
+  const [docSource, setDocSource] = useState<TradeDoc["source"]>("ops");
   const stepsForTrade = selectedTradeId
     ? workflowSteps.filter((s) => s.inboundTradeId === selectedTradeId)
     : workflowSteps;
   const selectedTrade = trades.find((t) => t.inboundTradeId === selectedTradeId);
 
+  const handleCreate = () => {
+    if (!docName.trim() || !selectedTradeId) return;
+    const step = stepsForTrade.find(s => s.tradeWorkflowStepId === selectedStepId) ?? stepsForTrade[0];
+    const req = workflowRequirements.find(r => r.workflowRequirementId === selectedReqId) ?? workflowRequirements[0];
+    onAdd({
+      tradeDocumentId: `tdoc_${Date.now()}`,
+      inboundTradeId: selectedTradeId,
+      tradeWorkflowStepId: step?.tradeWorkflowStepId ?? "tws_doc_001",
+      workflowRequirementId: req?.workflowRequirementId ?? "wr_subscription_agreement",
+      name: docName.trim(),
+      type: docType,
+      platform: selectedPlatform as TradeDoc["platform"],
+      source: docSource,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    onClose();
+  };
+
   return (
-    <DetailPanel title="Add Document" subtitle="POST /documents — register a new document requirement for a workflow step" onClose={onClose}>
+    <DetailPanel title="Add Document" subtitle="Register a new document requirement for a workflow step" onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Workflow context</h3>
@@ -1632,7 +1858,7 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <FormField label="Workflow step">
-              <select className={compactInputClass} disabled={stepsForTrade.length === 0}>
+              <select className={compactInputClass} value={selectedStepId} onChange={e => setSelectedStepId(e.target.value)} disabled={stepsForTrade.length === 0}>
                 <option value="">— Select step —</option>
                 {stepsForTrade.map((s) => (
                   <option key={s.tradeWorkflowStepId} value={s.tradeWorkflowStepId}>
@@ -1642,7 +1868,7 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
               </select>
             </FormField>
             <FormField label="Workflow requirement">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={selectedReqId} onChange={e => setSelectedReqId(e.target.value)}>
                 <option value="">— Select requirement —</option>
                 {workflowRequirements.map((r) => (
                   <option key={r.workflowRequirementId} value={r.workflowRequirementId}>
@@ -1658,11 +1884,11 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
           <h3 className="text-sm font-semibold text-white">Document identity</h3>
           <div className="mt-4 space-y-3">
             <FormField label="Document name">
-              <input className={compactInputClass} placeholder="Subscription Agreement" />
+              <input className={compactInputClass} placeholder="Subscription Agreement" value={docName} onChange={e => setDocName(e.target.value)} />
             </FormField>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Type">
-                <select className={compactInputClass}>
+                <select className={compactInputClass} value={docType} onChange={e => setDocType(e.target.value as TradeDoc["type"])}>
                   <option value="subscription_agreement">Subscription agreement</option>
                   <option value="signature_packet">Signature packet</option>
                   <option value="tax_document">Tax document</option>
@@ -1710,7 +1936,7 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               <FormField label="Source">
-                <select className={compactInputClass}>
+                <select className={compactInputClass} value={docSource} onChange={e => setDocSource(e.target.value as TradeDoc["source"])}>
                   <option value="ops">Ops</option>
                   <option value="broker">Broker</option>
                   <option value="external_platform">External platform</option>
@@ -1745,7 +1971,7 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button onClick={onClose} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Create Document</button>
+          <button onClick={handleCreate} disabled={!docName.trim() || !selectedTradeId} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Create Document</button>
         </div>
       </div>
     </DetailPanel>
@@ -2128,36 +2354,67 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 const compactInputClass = "h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60";
 
-function NewTradePanel({ onClose }: { onClose: () => void }) {
+function NewTradePanel({ allTrades, onAdd, onClose }: { allTrades: Trade[]; onAdd: (t: Trade) => void; onClose: () => void }) {
+  const [tradeType, setTradeType] = useState<Trade["type"]>("Buy");
+  const [selectedBrokerName, setSelectedBrokerName] = useState(brokers[0]?.name ?? "");
+  const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [qty, setQty] = useState("");
+
+  const brokerAssets = assets.filter(a => a.broker === selectedBrokerName);
+  const selectedAsset = assets.find(a => a.privateAssetId === selectedAssetId);
+  const selectedBroker = brokers.find(b => b.name === selectedBrokerName);
+
+  const handleCreate = () => {
+    if (!selectedBrokerName) return;
+    const num = allTrades.length + 1;
+    onAdd({
+      id: `TRD-${String(num).padStart(3, "0")}`,
+      inboundTradeId: `it_manual_${Date.now()}`,
+      vantageTradeId: `vt_manual_${Date.now()}`,
+      vantageBrokerId: selectedBroker?.vantageBrokerId ?? "",
+      patsBrokerProfileId: selectedBroker?.patsBrokerProfileId,
+      privateAssetId: selectedAsset?.privateAssetId,
+      brokerScopedTickerId: selectedAsset?.brokerScopedTickerId,
+      ticker: selectedAsset?.ticker ?? "MANUAL",
+      broker: selectedBrokerName,
+      asset: selectedAsset?.name ?? "Manual entry",
+      type: tradeType,
+      quantity: qty || "-",
+      amount: "-",
+      status: "workflow_required",
+      workflowRequired: true,
+      workflowReason: "every_trade",
+      routing: "Manual",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      fillId: "pending",
+    });
+    onClose();
+  };
+
   return (
     <DetailPanel title="New Manual Trade" subtitle="Manual entry for trades not received from Vantage Blotter" onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Trade context</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            {["Broker", "Broker ticker", "Linked private asset"].map((label) => (
-              <FormField key={label} label={label}>
-                <select className={compactInputClass}>
-                  <option>Select {label.toLowerCase()}</option>
-                </select>
-              </FormField>
-            ))}
-          </div>
-          <div className="mt-3">
-            <FormField label="Source">
-              <select className={compactInputClass}>
-                <option>Manual / PATS</option>
-                <option>Vantage Blotter correction</option>
+            <FormField label="Broker">
+              <select className={compactInputClass} value={selectedBrokerName} onChange={e => { setSelectedBrokerName(e.target.value); setSelectedAssetId(""); }}>
+                <option value="">— Select broker —</option>
+                {brokers.map(b => <option key={b.patsBrokerProfileId} value={b.name}>{b.name}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Private asset">
+              <select className={compactInputClass} value={selectedAssetId} onChange={e => setSelectedAssetId(e.target.value)} disabled={brokerAssets.length === 0}>
+                <option value="">— Select asset —</option>
+                {brokerAssets.map(a => <option key={a.privateAssetId} value={a.privateAssetId}>{a.name} ({a.ticker})</option>)}
               </select>
             </FormField>
           </div>
-          <div className="mt-3">
-            <FormField label="Account / investor / entity">
-              <select className={compactInputClass}>
-                <option>Select account / investor / entity</option>
-              </select>
-            </FormField>
-          </div>
+          {selectedAsset && (
+            <div className="mt-3 rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-500">
+              {selectedAsset.ticker} · {selectedAsset.className} · {selectedAsset.broker}
+            </div>
+          )}
         </ShellCard>
 
         <ShellCard className="p-4">
@@ -2165,14 +2422,14 @@ function NewTradePanel({ onClose }: { onClose: () => void }) {
           <div className="mt-4">
             <span className="text-xs font-semibold text-slate-300">Trade type</span>
             <div className="mt-1.5 grid grid-cols-4 gap-2">
-              {["Buy", "Sell", "Subscribe", "Redeem"].map((type, index) => (
-                <button key={type} className={`h-8 rounded-md border text-xs font-semibold ${index === 0 ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : type === "Sell" || type === "Redeem" ? "border-rose-400/20 bg-rose-400/10 text-rose-300" : "border-slate-700 bg-slate-900 text-slate-300"}`}>{type}</button>
+              {(["Buy", "Sell", "Subscribe", "Redeem"] as const).map((type) => (
+                <button key={type} onClick={() => setTradeType(type)} className={`h-8 rounded-md border text-xs font-semibold ${tradeType === type ? (type === "Buy" || type === "Subscribe" ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-rose-400/30 bg-rose-400/10 text-rose-300") : "border-slate-700 bg-slate-900 text-slate-300"}`}>{type}</button>
               ))}
             </div>
           </div>
           <div className="mt-3">
             <FormField label="Quantity or amount">
-              <input className={compactInputClass} placeholder="10,000 or $500,000" />
+              <input className={compactInputClass} placeholder="10,000 or $500,000" value={qty} onChange={e => setQty(e.target.value)} />
             </FormField>
           </div>
           <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
@@ -2186,14 +2443,47 @@ function NewTradePanel({ onClose }: { onClose: () => void }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Create Trade</button>
+          <button onClick={handleCreate} disabled={!selectedBrokerName} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Create Trade</button>
         </div>
       </div>
     </DetailPanel>
   );
 }
 
-function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
+function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; onClose: () => void }) {
+  const [selectedVantageBroker, setSelectedVantageBroker] = useState("Goldman Sachs Advisor Solutions");
+  const [workflowOwner, setWorkflowOwner] = useState("Broker + PATS Ops");
+  const [fillReturn, setFillReturn] = useState("PATS returns fill to Vantage");
+
+  const fillReturnMethodMap: Record<string, Broker["fillReturnMethod"]> = {
+    "PATS returns fill to Vantage": "vantage_blotter",
+    "API confirmation to PATS": "api_confirmation",
+    "Manual confirmation to PATS": "manual",
+    "Workflow completion event": "workflow_event",
+  };
+
+  const handleEnable = () => {
+    const shortCode = selectedVantageBroker.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 8);
+    onAdd({
+      patsBrokerProfileId: `pbp_${shortCode.toLowerCase()}_${Date.now()}`,
+      vantageBrokerId: `vb_${shortCode.toLowerCase()}_${Date.now()}`,
+      name: selectedVantageBroker,
+      code: shortCode,
+      status: "Active",
+      systems: ["Vantage broker sync"],
+      inboundTrades: 0,
+      listedAssets: 0,
+      defaultRoute: "Manual Review",
+      defaultVantageRouterId: null,
+      role: "Private asset processing",
+      workflowOwner,
+      fillReturnMethod: fillReturnMethodMap[fillReturn] ?? "manual",
+      fillReturn,
+      contacts: [],
+    });
+    onClose();
+  };
+
   return (
     <DetailPanel title="Enable Broker" subtitle="Select a Vantage broker and set the PATS rules used for private asset trades" onClose={onClose}>
       <div className="space-y-4">
@@ -2202,18 +2492,19 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
           <p className="mt-1 text-xs text-slate-500">PATS keeps the Vantage broker as the source and adds private asset rules on top.</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Vantage broker">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={selectedVantageBroker} onChange={e => setSelectedVantageBroker(e.target.value)}>
                 <option>Goldman Sachs Advisor Solutions</option>
                 <option>Morgan Stanley Alternatives</option>
                 <option>JP Morgan Private Markets</option>
                 <option>Schwab Alternative Investments</option>
+                <option>Fidelity Institutional</option>
+                <option>UBS Alternative Investments</option>
               </select>
             </FormField>
             <FormField label="PATS status">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} defaultValue="Enabled">
                 <option>Enabled</option>
                 <option>Pending setup</option>
-                <option>Disabled</option>
               </select>
             </FormField>
           </div>
@@ -2223,7 +2514,7 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
           <h3 className="text-sm font-semibold text-white">PATS settings</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Workflow owner">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={workflowOwner} onChange={e => setWorkflowOwner(e.target.value)}>
                 <option>Broker + PATS Ops</option>
                 <option>PATS Ops</option>
                 <option>Broker workflow</option>
@@ -2231,7 +2522,7 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
               </select>
             </FormField>
             <FormField label="Fill return method">
-              <select className={compactInputClass}>
+              <select className={compactInputClass} value={fillReturn} onChange={e => setFillReturn(e.target.value)}>
                 <option>PATS returns fill to Vantage</option>
                 <option>API confirmation to PATS</option>
                 <option>Manual confirmation to PATS</option>
@@ -2245,25 +2536,9 @@ function ConfigureBrokerPanel({ onClose }: { onClose: () => void }) {
           </div>
         </ShellCard>
 
-        <ShellCard className="hidden p-4">
-          <h3 className="text-sm font-semibold text-white">Initial broker-scoped ticker</h3>
-          <p className="mt-1 text-xs text-slate-500">Optional setup to show the Broker → Ticker → Private Asset relationship.</p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <FormField label="Ticker code">
-              <input className={compactInputClass} placeholder="TECH-A" />
-            </FormField>
-            <FormField label="Linked asset">
-              <select className={compactInputClass}>
-                <option>Select private asset</option>
-                {assets.map((asset) => <option key={asset.ticker}>{asset.name}</option>)}
-              </select>
-            </FormField>
-          </div>
-        </ShellCard>
-
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
-          <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Enable Broker</button>
+          <button onClick={handleEnable} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">Enable Broker</button>
         </div>
       </div>
     </DetailPanel>
@@ -2784,24 +3059,18 @@ export default function PatsPlatform() {
   const [newTradeOpen, setNewTradeOpen] = useState(false);
   const [newBrokerOpen, setNewBrokerOpen] = useState(false);
 
-  const content = useMemo(() => {
-    switch (active) {
-      case "dashboard": return <Dashboard onSelect={setActive} />;
-      case "trades": return <Trades openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />;
-      case "externalTrades": return <ExternalTrades openItem={setSelectedExternal} />;
-      case "brokers": return <Brokers openNewBroker={() => setNewBrokerOpen(true)} />;
-      case "assets": return <PrivateAssets />;
-      case "workflows": return <Workflows />;
-      case "documents": return <Documents />;
-      case "households": return <Households />;
-      case "execution": return <Execution />;
-      case "integrations": return <Integrations />;
-      case "activity": return <ActivityLog />;
-      case "alerts": return <AlertsPage />;
-      case "settings": return <SettingsPage />;
-      default: return null;
-    }
-  }, [active]);
+  const [localTrades, setLocalTrades] = useState<Trade[]>(() => loadLocal("pats_trades", trades));
+  const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
+  const [localDocs, setLocalDocs] = useState<TradeDoc[]>(() => loadLocal("pats_docs", tradeDocuments));
+  const [localWorkflows, setLocalWorkflows] = useState<WorkflowRecord[]>(() => loadLocal("pats_workflows", workflows));
+
+  const addTrade = (t: Trade) => { const n = [t, ...localTrades]; setLocalTrades(n); saveLocal("pats_trades", n); };
+  const updateBroker = (id: string, p: Partial<Broker>) => { const n = localBrokers.map(b => b.patsBrokerProfileId === id ? { ...b, ...p } : b); setLocalBrokers(n); saveLocal("pats_brokers", n); };
+  const addBroker = (b: Broker) => { const n = [...localBrokers, b]; setLocalBrokers(n); saveLocal("pats_brokers", n); };
+  const addDoc = (d: TradeDoc) => { const n = [...localDocs, d]; setLocalDocs(n); saveLocal("pats_docs", n); };
+  const updateDoc = (id: string, p: Partial<TradeDoc>) => { const n = localDocs.map(d => d.tradeDocumentId === id ? { ...d, ...p } : d); setLocalDocs(n); saveLocal("pats_docs", n); };
+  const addWorkflow = (w: WorkflowRecord) => { const n = [...localWorkflows, w]; setLocalWorkflows(n); saveLocal("pats_workflows", n); };
+  const updateWorkflow = (id: string, p: Partial<WorkflowRecord>) => { const n = localWorkflows.map(w => w.id === id ? { ...w, ...p } : w); setLocalWorkflows(n); saveLocal("pats_workflows", n); };
 
   return (
     <div className="min-h-screen bg-[#080a0d] font-sans text-slate-100 [font-feature-settings:'tnum']">
@@ -2809,12 +3078,26 @@ export default function PatsPlatform() {
       <TopBar />
       <MarketContextBar />
       <main className="ml-60 min-h-[calc(100vh-94px)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.055),transparent_32%),linear-gradient(180deg,#0b0d11_0%,#080a0d_100%)] px-5 py-5">
-        <div className="mx-auto max-w-[1560px]">{content}</div>
+        <div className="mx-auto max-w-[1560px]">
+          {active === "dashboard" && <Dashboard onSelect={setActive} />}
+          {active === "trades" && <Trades trades={localTrades} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
+          {active === "externalTrades" && <ExternalTrades openItem={setSelectedExternal} />}
+          {active === "brokers" && <Brokers brokers={localBrokers} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
+          {active === "assets" && <PrivateAssets />}
+          {active === "workflows" && <Workflows workflows={localWorkflows} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
+          {active === "documents" && <Documents docs={localDocs} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
+          {active === "households" && <Households />}
+          {active === "execution" && <Execution />}
+          {active === "integrations" && <Integrations />}
+          {active === "activity" && <ActivityLog />}
+          {active === "alerts" && <AlertsPage />}
+          {active === "settings" && <SettingsPage />}
+        </div>
       </main>
       {selectedTrade && <TradeDetails trade={selectedTrade} onClose={() => setSelectedTrade(null)} />}
       {selectedExternal && <ExternalTradeDetails id={selectedExternal} onClose={() => setSelectedExternal(null)} />}
-      {newTradeOpen && <NewTradePanel onClose={() => setNewTradeOpen(false)} />}
-      {newBrokerOpen && <ConfigureBrokerPanel onClose={() => setNewBrokerOpen(false)} />}
+      {newTradeOpen && <NewTradePanel allTrades={localTrades} onAdd={addTrade} onClose={() => setNewTradeOpen(false)} />}
+      {newBrokerOpen && <ConfigureBrokerPanel onAdd={addBroker} onClose={() => setNewBrokerOpen(false)} />}
     </div>
   );
 }
