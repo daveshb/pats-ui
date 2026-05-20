@@ -2452,7 +2452,7 @@ function NewTradePanel({ allTrades, onAdd, onClose }: { allTrades: Trade[]; onAd
 
 function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; onClose: () => void }) {
   const [selectedVantageBroker, setSelectedVantageBroker] = useState("Goldman Sachs Advisor Solutions");
-  const [workflowOwner, setWorkflowOwner] = useState("Broker + PATS Ops");
+  const [brokerStatus, setBrokerStatus] = useState<"Enabled" | "Disabled">("Enabled");
   const [fillReturn, setFillReturn] = useState("PATS returns fill to Vantage");
 
   const fillReturnMethodMap: Record<string, Broker["fillReturnMethod"]> = {
@@ -2469,14 +2469,14 @@ function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; 
       vantageBrokerId: `vb_${shortCode.toLowerCase()}_${Date.now()}`,
       name: selectedVantageBroker,
       code: shortCode,
-      status: "Active",
+      status: brokerStatus === "Enabled" ? "Active" : "Disconnected",
       systems: ["Vantage broker sync"],
       inboundTrades: 0,
       listedAssets: 0,
       defaultRoute: "Manual Review",
       defaultVantageRouterId: null,
       role: "Private asset processing",
-      workflowOwner,
+      workflowOwner: "Sarah Chen",
       fillReturnMethod: fillReturnMethodMap[fillReturn] ?? "manual",
       fillReturn,
       contacts: [],
@@ -2485,11 +2485,11 @@ function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; 
   };
 
   return (
-    <DetailPanel title="Enable Broker" subtitle="Select a Vantage broker and set the PATS rules used for private asset trades" onClose={onClose}>
+    <DetailPanel title="Enable Broker" subtitle="Select a Vantage broker and set the basic PATS settings for private asset trades" onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Broker from Vantage</h3>
-          <p className="mt-1 text-xs text-slate-500">PATS keeps the Vantage broker as the source and adds private asset rules on top.</p>
+          <p className="mt-1 text-xs text-slate-500">PATS uses the Vantage broker as the source record.</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Vantage broker">
               <select className={compactInputClass} value={selectedVantageBroker} onChange={e => setSelectedVantageBroker(e.target.value)}>
@@ -2502,9 +2502,9 @@ function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; 
               </select>
             </FormField>
             <FormField label="PATS status">
-              <select className={compactInputClass} defaultValue="Enabled">
+              <select className={compactInputClass} value={brokerStatus} onChange={e => setBrokerStatus(e.target.value as "Enabled" | "Disabled")}>
                 <option>Enabled</option>
-                <option>Pending setup</option>
+                <option>Disabled</option>
               </select>
             </FormField>
           </div>
@@ -2512,15 +2512,7 @@ function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; 
 
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">PATS settings</h3>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <FormField label="Workflow owner">
-              <select className={compactInputClass} value={workflowOwner} onChange={e => setWorkflowOwner(e.target.value)}>
-                <option>Broker + PATS Ops</option>
-                <option>PATS Ops</option>
-                <option>Broker workflow</option>
-                <option>External platform</option>
-              </select>
-            </FormField>
+          <div className="mt-4 grid grid-cols-1 gap-3">
             <FormField label="Fill return method">
               <select className={compactInputClass} value={fillReturn} onChange={e => setFillReturn(e.target.value)}>
                 <option>PATS returns fill to Vantage</option>
@@ -2530,9 +2522,17 @@ function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; 
               </select>
             </FormField>
           </div>
-          <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
-            <p className="text-xs font-semibold text-slate-100">Private assets, broker tickers, and workflow templates are configured after the broker is enabled.</p>
-            <p className="mt-1 text-xs text-slate-500">This keeps broker setup focused and avoids mixing broker configuration with asset setup.</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Owner</p>
+              <p className="mt-1 text-xs font-semibold text-slate-100">Current user</p>
+              <p className="mt-1 text-xs text-slate-500">Saved by PATS from the active session.</p>
+            </div>
+            <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Next setup</p>
+              <p className="mt-1 text-xs font-semibold text-slate-100">Assets and workflows</p>
+              <p className="mt-1 text-xs text-slate-500">Configured after the broker is enabled.</p>
+            </div>
           </div>
         </ShellCard>
 
@@ -3101,5 +3101,3 @@ export default function PatsPlatform() {
     </div>
   );
 }
-
-
