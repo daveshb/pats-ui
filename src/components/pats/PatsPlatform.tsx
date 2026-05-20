@@ -1602,6 +1602,8 @@ function Documents() {
 function AddDocumentPanel({ onClose }: { onClose: () => void }) {
   const [selectedTradeId, setSelectedTradeId] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("manual_upload");
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const stepsForTrade = selectedTradeId
     ? workflowSteps.filter((s) => s.inboundTradeId === selectedTradeId)
     : workflowSteps;
@@ -1679,12 +1681,33 @@ function AddDocumentPanel({ onClose }: { onClose: () => void }) {
                 </select>
               </FormField>
               {selectedPlatform === "manual_upload" && (
-                <FormField label="File">
-                  <label className={`${compactInputClass} flex cursor-pointer items-center gap-2 text-slate-400`}>
-                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg" />
-                    <span className="text-[10px]">Choose file...</span>
+                <div className="col-span-2">
+                  <label
+                    className={`relative flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${dragOver ? "border-sky-400 bg-sky-400/10" : uploadedFile ? "border-emerald-500/50 bg-emerald-500/5" : "border-slate-700 bg-slate-950/40 hover:border-slate-500 hover:bg-slate-900/60"}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) setUploadedFile(f); }}
+                  >
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg" onChange={(e) => { const f = e.target.files?.[0]; if (f) setUploadedFile(f); }} />
+                    {uploadedFile ? (
+                      <>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20">
+                          <svg className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        </div>
+                        <p className="text-xs font-semibold text-emerald-400">{uploadedFile.name}</p>
+                        <p className="text-[10px] text-slate-500">{(uploadedFile.size / 1024).toFixed(0)} KB · click to replace</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800">
+                          <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-300">Drag and drop or <span className="text-sky-400">browse</span></p>
+                        <p className="text-[10px] text-slate-500">PDF, DOC, DOCX, PNG, JPG</p>
+                      </>
+                    )}
                   </label>
-                </FormField>
+                </div>
               )}
               <FormField label="Source">
                 <select className={compactInputClass}>
