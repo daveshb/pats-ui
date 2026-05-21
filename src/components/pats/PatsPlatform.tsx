@@ -187,6 +187,42 @@ interface TradeDoc {
   updatedAt: string;
 }
 
+interface ExecutionFill {
+  fillId: string;
+  executionId: string;
+  quantity: string;
+  price: string;
+  grossAmount: string;
+  netAmount?: string;
+  filledAt: string;
+  status: "pending" | "confirmed" | "cancelled";
+  returnStatus: "not_ready" | "ready_to_return" | "returned" | "return_failed" | "manual_return_required";
+  returnedAt?: string;
+  returnFailureReason?: string;
+}
+
+interface ExecutionFlowRecord {
+  executionId?: string;
+  inboundTradeId: string;
+  tradeWorkflowId?: string;
+  workflowTemplateId?: string;
+  tradeId: string;
+  ticker: string;
+  broker: string;
+  asset: string;
+  side: string;
+  quantity: string;
+  amount: string;
+  executionStatus: "not_created" | "pending" | "ready" | "routed" | "executed" | "failed" | "cancelled";
+  routeMethod?: "manual";
+  externalExecutionId?: string;
+  fills: ExecutionFill[];
+  currentStep: number;
+  blockedStep: number | null;
+  destination: string;
+  lastUpdate: string;
+}
+
 interface HouseholdRecord {
   householdId: string;
   name: string;
@@ -269,13 +305,7 @@ const externalTrades = [
   { externalId: "vt_unresolved_001", inboundTradeId: "it_a418e890", source: "Vantage API", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", patsBrokerProfileId: "-", privateAssetId: "-", brokerScopedTickerId: "-", broker: "Morgan Stanley Alternatives", ticker: "DOES-NOT-EXIST", asset: "Not resolved", validation: "unresolved", execution: "unresolved", received: "44 min ago" },
 ];
 
-const fillDeliveries = [
-  { tradeId: "it_4eb00593", fillId: "not_created_yet", destination: "Vantage", recipient: "future fill return", method: "not implemented", status: "validated", last: "2 min ago", next: "execution module" },
-  { tradeId: "it_d672e1c1", fillId: "not_created_yet", destination: "TradeWorkflow", recipient: "ops checklist", method: "workflow steps", status: "workflow_required", last: "4 min ago", next: "complete required steps" },
-  { tradeId: "it_a418e890", fillId: "not_created_yet", destination: "Ops review", recipient: "resolution queue", method: "manual review", status: "unresolved", last: "9 min ago", next: "create ticker mapping" },
-];
-
-const executionFlows = [
+const executionFlows: ExecutionFlowRecord[] = [
   {
     tradeWorkflowId: "tw_001",
     inboundTradeId: "it_d672e1c1",
@@ -284,9 +314,12 @@ const executionFlows = [
     ticker: "TECH-A",
     broker: "Goldman Sachs Advisor Solutions",
     asset: "TechCorp Series A",
-    fillId: "not_created_yet",
-    status: "in_progress",
-    currentStep: 2,
+    side: "Subscribe",
+    quantity: "10,000",
+    amount: "$452,000",
+    executionStatus: "not_created",
+    fills: [],
+    currentStep: 3,
     blockedStep: null,
     destination: "Vantage Blotter",
     lastUpdate: "2 min ago",
@@ -299,14 +332,18 @@ const executionFlows = [
     ticker: "HEALTH-B",
     broker: "Morgan Stanley Alternatives",
     asset: "HealthTech Preferred",
-    fillId: "Pending",
-    status: "pending",
+    side: "Redeem",
+    quantity: "5,000",
+    amount: "$642,500",
+    executionStatus: "not_created",
+    fills: [],
     currentStep: 2,
     blockedStep: 2,
-    destination: "Vantage Blotter",
+    destination: "Manual broker workflow",
     lastUpdate: "8 min ago",
   },
   {
+    executionId: "ex_001",
     tradeWorkflowId: "tw_003",
     inboundTradeId: "it_4eb00593",
     workflowTemplateId: "wt_tech_subscription",
@@ -314,16 +351,76 @@ const executionFlows = [
     ticker: "TECH-A",
     broker: "Goldman Sachs Advisor Solutions",
     asset: "TechCorp Series A",
-    fillId: "pending",
-    status: "completed",
+    side: "Buy",
+    quantity: "10,000",
+    amount: "$452,000",
+    executionStatus: "executed",
+    routeMethod: "manual",
+    externalExecutionId: "GSAS-EXEC-44912",
+    fills: [
+      {
+        fillId: "fill_001",
+        executionId: "ex_001",
+        quantity: "10,000",
+        price: "$45.20",
+        grossAmount: "$452,000",
+        netAmount: "$451,500",
+        filledAt: "10:33 AM",
+        status: "confirmed",
+        returnStatus: "returned",
+        returnedAt: "10:38 AM",
+      },
+    ],
     currentStep: 6,
     blockedStep: null,
     destination: "Vantage Blotter",
     lastUpdate: "4 min ago",
   },
+  {
+    executionId: "ex_002",
+    inboundTradeId: "it_7bd6a44f",
+    workflowTemplateId: "wt_fintech_subscription",
+    tradeId: "TRD-006",
+    ticker: "FINTECH-D",
+    broker: "iCapital Marketplace",
+    asset: "FinTech Growth",
+    side: "Buy",
+    quantity: "7,500",
+    amount: "$1,580,625",
+    executionStatus: "routed",
+    routeMethod: "manual",
+    externalExecutionId: "ICAP-ROUTE-7781",
+    fills: [
+      {
+        fillId: "fill_002",
+        executionId: "ex_002",
+        quantity: "3,000",
+        price: "$210.75",
+        grossAmount: "$632,250",
+        netAmount: "$631,900",
+        filledAt: "9:59 AM",
+        status: "confirmed",
+        returnStatus: "manual_return_required",
+      },
+      {
+        fillId: "fill_003",
+        executionId: "ex_002",
+        quantity: "4,500",
+        price: "$210.75",
+        grossAmount: "$948,375",
+        filledAt: "10:06 AM",
+        status: "pending",
+        returnStatus: "not_ready",
+      },
+    ],
+    currentStep: 6,
+    blockedStep: null,
+    destination: "Manual return queue",
+    lastUpdate: "12 min ago",
+  },
 ];
 
-const executionSteps = ["Inbound trade", "Ticker resolved", "Workflow required", "Required steps", "Eligibility update", "Validated", "Ready for execution"];
+const executionSteps = ["Inbound trade", "Asset resolved", "Workflow done", "Execution created", "Fill confirmed", "Return closed"];
 
 const activityEvents = [
   "InboundTrade received from Vantage API",
@@ -376,11 +473,11 @@ const tradeGridClass = "grid-cols-[1.15fr_1.2fr_1.25fr_1.25fr_0.8fr_0.95fr_1fr]"
 
 function toneFor(value: string): StatusTone {
   const lower = value.toLowerCase().replaceAll("_", " ");
-  if (["buy", "subscribe", "filled", "active", "validated", "already eligible", "no template", "executed", "sent", "signed", "completed", "uploaded", "eligible", "connected", "approved", "fill returned"].includes(lower)) return "green";
-  if (["pending", "partial", "in progress", "retrying", "needs review", "workflow required", "no eligibility", "every trade", "medium", "workflow pending", "docs pending", "returning fill", "waiting"].includes(lower)) return "yellow";
-  if (["sell", "redeem", "failed", "rejected", "blocked", "cancelled", "critical", "high", "low", "disconnected", "unresolved", "revoked", "expired"].includes(lower)) return "red";
-  if (["received", "routed", "open", "once per user"].includes(lower)) return "blue";
-  if (["draft", "not started"].includes(lower)) return "gray";
+  if (["buy", "subscribe", "filled", "active", "validated", "already eligible", "no template", "executed", "sent", "signed", "completed", "uploaded", "eligible", "connected", "approved", "fill returned", "returned", "confirmed"].includes(lower)) return "green";
+  if (["pending", "partial", "in progress", "retrying", "needs review", "workflow required", "no eligibility", "every trade", "medium", "workflow pending", "docs pending", "returning fill", "waiting", "ready to return", "manual return required", "manual return"].includes(lower)) return "yellow";
+  if (["sell", "redeem", "failed", "return failed", "rejected", "blocked", "cancelled", "critical", "high", "low", "disconnected", "unresolved", "revoked", "expired"].includes(lower)) return "red";
+  if (["received", "routed", "ready", "open", "once per user"].includes(lower)) return "blue";
+  if (["draft", "not started", "not ready", "not created"].includes(lower)) return "gray";
   return "purple";
 }
 
@@ -432,6 +529,31 @@ function tradeInvestorLabel(trade: Trade) {
   if (trade.accountId) return trade.accountId.replace("acct-", "Account ");
   if (trade.userId) return trade.userId.replace("user-", "User ");
   return "Not assigned";
+}
+
+function executionFillSummary(flow: ExecutionFlowRecord) {
+  if (flow.fills.length === 0) return "No fill yet";
+  const confirmed = flow.fills.filter(fill => fill.status === "confirmed").length;
+  return `${confirmed}/${flow.fills.length} confirmed`;
+}
+
+function executionReturnSummary(flow: ExecutionFlowRecord) {
+  if (flow.fills.length === 0) return "Not ready";
+  if (flow.fills.some(fill => fill.returnStatus === "return_failed")) return "Return failed";
+  if (flow.fills.some(fill => fill.returnStatus === "manual_return_required")) return "Manual return";
+  if (flow.fills.every(fill => fill.returnStatus === "returned")) return "Returned";
+  if (flow.fills.some(fill => fill.returnStatus === "ready_to_return")) return "Ready to return";
+  return "Not ready";
+}
+
+function executionPrimaryAction(flow: ExecutionFlowRecord) {
+  if (!flow.executionId) return "Create execution";
+  if (flow.fills.length === 0) return "Create fill";
+  if (flow.fills.some(fill => fill.status === "pending")) return "Confirm fill";
+  if (flow.fills.some(fill => fill.returnStatus === "ready_to_return")) return "Return to Vantage";
+  if (flow.fills.some(fill => fill.returnStatus === "manual_return_required")) return "Manual return required";
+  if (flow.fills.some(fill => fill.returnStatus === "return_failed")) return "Review return failure";
+  return "View completed flow";
 }
 
 function StatusBadge({ value, tone }: { value: string; tone?: StatusTone }) {
@@ -1981,7 +2103,7 @@ function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; on
 function Execution() {
   return (
     <>
-      <PageTitle title="Execution Flow" subtitle="TradeWorkflow instances and step status before a trade can move from workflow_required to validated" />
+      <PageTitle title="Execution Flow" subtitle="Validated trades, execution records, fills, and return status back to Vantage" />
       <div className="space-y-4">
         {executionFlows.map((flow) => (
           <ShellCard key={flow.tradeId} className="p-5">
@@ -1990,19 +2112,20 @@ function Execution() {
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-sky-300">{flow.tradeId}</span>
                   <span className="text-sm font-semibold text-white">{flow.ticker}</span>
-                  <StatusBadge value={flow.status} />
+                  <StatusBadge value={flow.executionStatus} />
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{flow.asset} · {flow.broker}</p>
               </div>
-              <div className="grid grid-cols-3 gap-5 text-right">
-                <Info label="Workflow" value={flow.status} />
-                <Info label="Private asset" value={flow.asset} />
+              <div className="grid grid-cols-4 gap-5 text-right">
+                <Info label="Execution" value={displayLabel(flow.executionStatus)} />
+                <Info label="Fill" value={executionFillSummary(flow)} />
+                <Info label="Return" value={executionReturnSummary(flow)} />
                 <Info label="Updated" value={flow.lastUpdate} />
               </div>
             </div>
 
             <div className="mt-5">
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-6 gap-2">
                 {executionSteps.map((step, index) => {
                   const isDone = index < flow.currentStep && flow.blockedStep !== index;
                   const isCurrent = index === flow.currentStep;
@@ -2033,12 +2156,64 @@ function Execution() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-[1fr_1fr] gap-3">
-              <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
-                Source: inbound trade -&gt; ticker resolution -&gt; workflow decision
+            <div className="mt-5 grid grid-cols-[0.9fr_1.25fr_1fr] gap-3">
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-white">Execution</h3>
+                  <Route className="h-3.5 w-3.5 text-sky-300" />
+                </div>
+                <div className="mt-3 space-y-2">
+                  <Info label="Execution ID" value={flow.executionId ?? "Not created"} />
+                  <Info label="Route method" value={flow.routeMethod ? displayLabel(flow.routeMethod) : "Waiting"} />
+                  <Info label="External execution" value={flow.externalExecutionId ?? "-"} />
+                  <Info label="Action" value={executionPrimaryAction(flow)} />
+                </div>
               </div>
-              <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
-                Result: required steps completed -&gt; inbound trade validated -&gt; eligibility can be created
+
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-white">Fills</h3>
+                  <StatusBadge value={executionFillSummary(flow)} tone={flow.fills.length ? undefined : "gray"} />
+                </div>
+                <div className="mt-3 space-y-2">
+                  {flow.fills.length === 0 ? (
+                    <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-500">
+                      No fill has been created yet. After execution, Ops can register quantity, price, gross amount, and filled time.
+                    </div>
+                  ) : flow.fills.map((fill) => (
+                    <div key={fill.fillId} className="rounded-md border border-slate-800 bg-slate-950/50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-100">{fill.fillId}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{fill.quantity} @ {fill.price} - {fill.filledAt}</p>
+                        </div>
+                        <StatusBadge value={fill.status} />
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <Info label="Gross" value={fill.grossAmount} />
+                        <Info label="Net" value={fill.netAmount ?? "-"} />
+                        <Info label="Return" value={displayLabel(fill.returnStatus)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-white">Return control</h3>
+                  <Send className="h-3.5 w-3.5 text-emerald-300" />
+                </div>
+                <div className="mt-3 space-y-2">
+                  <Info label="Destination" value={flow.destination} />
+                  <Info label="Broker rule" value={brokers.find(item => item.name === flow.broker)?.fillReturn ?? "Manual confirmation"} />
+                  <Info label="Return status" value={executionReturnSummary(flow)} />
+                  {flow.fills.some(fill => fill.returnFailureReason) && (
+                    <div className="rounded-md border border-rose-400/20 bg-rose-400/10 p-2 text-[11px] text-rose-200">
+                      {flow.fills.find(fill => fill.returnFailureReason)?.returnFailureReason}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
