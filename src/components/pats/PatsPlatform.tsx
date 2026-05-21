@@ -556,6 +556,10 @@ function executionPrimaryAction(flow: ExecutionFlowRecord) {
   return "View completed flow";
 }
 
+function nextMockId(prefix: string) {
+  return `${prefix}_${Date.now().toString(36).slice(-6)}`;
+}
+
 function StatusBadge({ value, tone }: { value: string; tone?: StatusTone }) {
   return (
     <span className={`inline-flex h-4 w-fit items-center whitespace-nowrap rounded border px-1.5 text-[8px] font-semibold leading-none tracking-normal ${badgeClasses(tone ?? toneFor(value))}`}>
@@ -2101,11 +2105,58 @@ function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; on
 }
 
 function Execution() {
+  const [flows, setFlows] = useState<ExecutionFlowRecord[]>(executionFlows);
+  const [fillPanelFlow, setFillPanelFlow] = useState<ExecutionFlowRecord | null>(null);
+  const [failedFill, setFailedFill] = useState<{ flowId: string; fillId: string } | null>(null);
+
+  const updateFlow = (tradeId: string, updater: (flow: ExecutionFlowRecord) => ExecutionFlowRecord) => {
+    setFlows(current => current.map(flow => flow.tradeId === tradeId ? updater(flow) : flow));
+  };
+
+  const createExecution = (flow: ExecutionFlowRecord) => {
+    updateFlow(flow.tradeId, current => ({
+      ...current,
+      executionId: nextMockId("ex"),
+      executionStatus: "pending",
+      routeMethod: "manual",
+      externalExecutionId: nextMockId("route"),
+      currentStep: Math.max(current.currentStep, 4),
+      blockedStep: null,
+      lastUpdate: "Just now",
+    }));
+  };
+
+  const addFill = (tradeId: string, fill: ExecutionFill) => {
+    updateFlow(tradeId, current => ({
+      ...current,
+      executionStatus: "executed",
+      fills: [...current.fills, fill],
+      currentStep: Math.max(current.currentStep, 4),
+      blockedStep: null,
+      lastUpdate: "Just now",
+    }));
+  };
+
+  const updateFill = (tradeId: string, fillId: string, updater: (fill: ExecutionFill) => ExecutionFill) => {
+    updateFlow(tradeId, current => {
+      const fills = current.fills.map(fill => fill.fillId === fillId ? updater(fill) : fill);
+      const allReturned = fills.length > 0 && fills.every(fill => fill.returnStatus === "returned");
+      const hasReturnFailure = fills.some(fill => fill.returnStatus === "return_failed");
+      return {
+        ...current,
+        fills,
+        currentStep: allReturned ? 6 : Math.max(current.currentStep, 5),
+        blockedStep: hasReturnFailure ? 5 : null,
+        lastUpdate: "Just now",
+      };
+    });
+  };
+
   return (
     <>
       <PageTitle title="Execution Flow" subtitle="Validated trades, execution records, fills, and return status back to Vantage" />
       <div className="space-y-4">
-        {executionFlows.map((flow) => (
+        {flows.map((flow) => (
           <ShellCard key={flow.tradeId} className="p-5">
             <div className="flex items-start justify-between gap-6">
               <div>
@@ -2168,12 +2219,24 @@ function Execution() {
                   <Info label="External execution" value={flow.externalExecutionId ?? "-"} />
                   <Info label="Action" value={executionPrimaryAction(flow)} />
                 </div>
+                {!flow.executionId && (
+                  <button onClick={() => createExecution(flow)} className="mt-4 h-8 w-full rounded-md bg-sky-500 text-xs font-semibold text-white">
+                    Create Execution
+                  </button>
+                )}
               </div>
 
               <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-white">Fills</h3>
-                  <StatusBadge value={executionFillSummary(flow)} tone={flow.fills.length ? undefined : "gray"} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge value={executionFillSummary(flow)} tone={flow.fills.length ? undefined : "gray"} />
+                    {flow.executionId && (
+                      <button onClick={() => setFillPanelFlow(flow)} className="rounded-md border border-sky-400/30 px-2 py-1 text-[11px] font-semibold text-sky-300 hover:bg-sky-400/10">
+                        {flow.fills.length ? "Add Fill" : "Create Fill"}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3 space-y-2">
                   {flow.fills.length === 0 ? (
@@ -2193,6 +2256,46 @@ function Execution() {
                         <Info label="Gross" value={fill.grossAmount} />
                         <Info label="Net" value={fill.netAmount ?? "-"} />
                         <Info label="Return" value={displayLabel(fill.returnStatus)} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {fill.status === "pending" && (
+                          <button
+                            onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, status: "confirmed", returnStatus: "ready_to_return" }))}
+                            className="h-7 rounded-md bg-emerald-500 px-3 text-[11px] font-semibold text-white"
+                          >
+                            Confirm Fill
+                          </button>
+                        )}
+                        {fill.status === "confirmed" && fill.returnStatus === "ready_to_return" && (
+                          <>
+                            <button
+                              onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "returned", returnedAt: "Just now" }))}
+                              className="h-7 rounded-md bg-sky-500 px-3 text-[11px] font-semibold text-white"
+                            >
+                              Mark Returned
+                            </button>
+                            <button
+                              onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "manual_return_required" }))}
+                              className="h-7 rounded-md border border-amber-400/30 px-3 text-[11px] font-semibold text-amber-300"
+                            >
+                              Manual Return
+                            </button>
+                            <button
+                              onClick={() => setFailedFill({ flowId: flow.tradeId, fillId: fill.fillId })}
+                              className="h-7 rounded-md border border-rose-400/30 px-3 text-[11px] font-semibold text-rose-300"
+                            >
+                              Return Failed
+                            </button>
+                          </>
+                        )}
+                        {fill.status === "confirmed" && fill.returnStatus === "manual_return_required" && (
+                          <button
+                            onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "returned", returnedAt: "Just now" }))}
+                            className="h-7 rounded-md bg-sky-500 px-3 text-[11px] font-semibold text-white"
+                          >
+                            Mark Manual Returned
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2228,7 +2331,128 @@ function Execution() {
           </ShellCard>
         ))}
       </div>
+      {fillPanelFlow && (
+        <ExecutionFillPanel
+          flow={fillPanelFlow}
+          onClose={() => setFillPanelFlow(null)}
+          onAdd={(fill) => {
+            addFill(fillPanelFlow.tradeId, fill);
+            setFillPanelFlow(null);
+          }}
+        />
+      )}
+      {failedFill && (
+        <ReturnFailedPanel
+          onClose={() => setFailedFill(null)}
+          onSave={(reason) => {
+            updateFill(failedFill.flowId, failedFill.fillId, current => ({
+              ...current,
+              returnStatus: "return_failed",
+              returnFailureReason: reason,
+            }));
+            setFailedFill(null);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function ExecutionFillPanel({ flow, onAdd, onClose }: { flow: ExecutionFlowRecord; onAdd: (fill: ExecutionFill) => void; onClose: () => void }) {
+  const [quantity, setQuantity] = useState("");
+  const [price, setPrice] = useState("");
+  const [grossAmount, setGrossAmount] = useState("");
+  const [netAmount, setNetAmount] = useState("");
+  const [filledAt, setFilledAt] = useState(new Date().toISOString().slice(0, 16));
+
+  const canCreate = quantity.trim() && price.trim() && grossAmount.trim() && filledAt.trim();
+  const handleCreate = () => {
+    if (!canCreate || !flow.executionId) return;
+    onAdd({
+      fillId: nextMockId("fill"),
+      executionId: flow.executionId,
+      quantity,
+      price,
+      grossAmount,
+      netAmount: netAmount.trim() || undefined,
+      filledAt: new Date(filledAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+      status: "pending",
+      returnStatus: "not_ready",
+    });
+  };
+
+  return (
+    <DetailPanel title="Create Execution Fill" subtitle={`${flow.tradeId} - ${flow.ticker} - ${flow.asset}`} onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Execution context</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Info label="Execution ID" value={flow.executionId ?? "Not created"} />
+            <Info label="Inbound trade" value={flow.inboundTradeId} />
+            <Info label="Broker" value={flow.broker} />
+            <Info label="Private asset" value={flow.asset} />
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Fill details</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="Quantity">
+              <input className={compactInputClass} value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="10000" />
+            </FormField>
+            <FormField label="Price">
+              <input className={compactInputClass} value={price} onChange={e => setPrice(e.target.value)} placeholder="45.20" />
+            </FormField>
+            <FormField label="Gross amount">
+              <input className={compactInputClass} value={grossAmount} onChange={e => setGrossAmount(e.target.value)} placeholder="452000" />
+            </FormField>
+            <FormField label="Net amount optional">
+              <input className={compactInputClass} value={netAmount} onChange={e => setNetAmount(e.target.value)} placeholder="451500" />
+            </FormField>
+            <div className="col-span-2">
+              <FormField label="Filled at">
+                <input className={compactInputClass} type="datetime-local" value={filledAt} onChange={e => setFilledAt(e.target.value)} />
+              </FormField>
+            </div>
+          </div>
+        </ShellCard>
+
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Backend action</h3>
+          <p className="mt-2 text-xs text-slate-500">This mock represents POST /executions/{`{executionId}`}/fills. The fill starts as pending and returnStatus starts as not_ready.</p>
+        </ShellCard>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={handleCreate} disabled={!canCreate} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Create Fill</button>
+        </div>
+      </div>
+    </DetailPanel>
+  );
+}
+
+function ReturnFailedPanel({ onSave, onClose }: { onSave: (reason: string) => void; onClose: () => void }) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <DetailPanel title="Mark Return Failed" subtitle="Capture why the fill could not be returned to Vantage" onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4">
+          <FormField label="Failure reason">
+            <textarea
+              className="min-h-28 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 py-2 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="Vantage return endpoint unavailable"
+            />
+          </FormField>
+        </ShellCard>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={() => onSave(reason)} disabled={!reason.trim()} className="h-9 rounded-md bg-rose-500 text-xs font-semibold text-white disabled:opacity-40">Save Failure</button>
+        </div>
+      </div>
+    </DetailPanel>
   );
 }
 
