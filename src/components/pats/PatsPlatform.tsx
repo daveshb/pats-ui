@@ -1820,24 +1820,132 @@ function documentPrimaryAction(doc: TradeDoc) {
   return "Open document";
 }
 
-function DocumentViewerSwitcher({ viewer, onChange, actionCount }: { viewer: DocumentViewer; onChange: (id: string) => void; actionCount: number }) {
+function DocumentRoleTabs({ viewer, onChange, actionCount }: { viewer: DocumentViewer; onChange: (id: string) => void; actionCount: number }) {
   return (
-    <ShellCard className="mb-5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold text-slate-100">Viewing documents as {viewer.label}</p>
-          <p className="mt-1 text-[11px] text-slate-500">Contacts decides the point of view. The UI only shows documents and actions this role can access.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {actionCount > 0 && <StatusBadge value={`${actionCount} pending actions`} tone="yellow" />}
-          <select className={compactInputClass} value={viewer.contactId} onChange={(e) => onChange(e.target.value)}>
-            {documentViewers.map((candidate) => (
-              <option key={candidate.contactId} value={candidate.contactId}>{candidate.label}</option>
-            ))}
-          </select>
-        </div>
+    <div className="mb-5 border-b border-slate-800">
+      <div className="flex flex-wrap items-end gap-1">
+        {documentViewers.map((candidate) => {
+          const active = candidate.contactId === viewer.contactId;
+          return (
+            <button
+              key={candidate.contactId}
+              onClick={() => onChange(candidate.contactId)}
+              className={`relative flex h-11 items-center gap-2 px-3 text-xs font-semibold transition ${active ? "text-white" : "text-slate-500 hover:text-slate-200"}`}
+            >
+              <span>{candidate.label}</span>
+              {active && actionCount > 0 && <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] text-amber-200">{actionCount}</span>}
+              {active && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-sky-400" />}
+            </button>
+          );
+        })}
       </div>
-    </ShellCard>
+      <p className="mt-2 pb-3 text-[11px] text-slate-500">
+        Contacts decides the point of view. Each role sees a different document experience, not just a filtered table.
+      </p>
+    </div>
+  );
+}
+
+function ClientSignerDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer: DocumentViewer }) {
+  return (
+    <div className="grid grid-cols-[1fr_0.7fr] gap-5">
+      <ShellCard className="p-5">
+        <h2 className="text-lg font-semibold text-white">Documents that need your action</h2>
+        <p className="mt-1 text-xs text-slate-500">This view is intentionally simple for the person signing or uploading documents.</p>
+        <div className="mt-5 space-y-3">
+          {docs.map((doc) => {
+            const asset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
+            return (
+              <div key={doc.tradeDocumentId} className="rounded-lg border border-slate-800 bg-slate-950/35 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold text-white">{doc.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">{asset?.name ?? "Private asset"} · Due {doc.dueDate ?? "not set"}</p>
+                  </div>
+                  <StatusBadge value={doc.status} />
+                </div>
+                <button className="mt-4 h-10 w-full rounded-md bg-sky-500 text-sm font-semibold text-white shadow-lg shadow-sky-950/30">
+                  {documentPrimaryCta(doc, viewer)}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </ShellCard>
+      <ShellCard className="p-5">
+        <h2 className="text-sm font-semibold text-white">What the client sees</h2>
+        <div className="mt-4 space-y-3 text-xs text-slate-400">
+          <p>No raw workflow IDs.</p>
+          <p>No broker operations controls.</p>
+          <p>Only the documents assigned to this signer.</p>
+          <p>Clear red/amber action state when something is pending.</p>
+        </div>
+      </ShellCard>
+    </div>
+  );
+}
+
+function WealthManagerDocumentsView({ docs }: { docs: TradeDoc[] }) {
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-4">
+        <MetricCard label="Client documents" value={`${docs.length}`} />
+        <MetricCard label="Need action" value={`${docs.filter((doc) => doc.actionRequired).length}`} />
+        <MetricCard label="Blocked" value={`${docs.filter((doc) => doc.status === "blocked").length}`} />
+      </div>
+      <ShellCard className="overflow-hidden">
+        <div className="border-b border-slate-800 px-5 py-3">
+          <h2 className="text-sm font-semibold text-white">Household document status</h2>
+          <p className="mt-1 text-[11px] text-slate-500">Wealth manager view is for follow-up and visibility, not document operations.</p>
+        </div>
+        {docs.map((doc) => {
+          const asset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
+          return (
+            <div key={doc.tradeDocumentId} className="grid grid-cols-[1fr_0.75fr_0.75fr_0.7fr] border-b border-slate-800/70 px-5 py-4 text-sm last:border-b-0">
+              <div>
+                <p className="font-semibold text-slate-100">{doc.name}</p>
+                <p className="mt-1 text-xs text-slate-500">{asset?.name ?? doc.privateAssetId} · {doc.accountId}</p>
+              </div>
+              <span className="text-xs text-slate-300">{actorLabel(doc)}</span>
+              <span className="text-xs text-slate-400">{doc.dueDate ?? "-"}</span>
+              <StatusBadge value={doc.status} />
+            </div>
+          );
+        })}
+      </ShellCard>
+    </div>
+  );
+}
+
+function SponsorDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer: DocumentViewer }) {
+  return (
+    <div className="grid grid-cols-[0.85fr_1.15fr] gap-5">
+      <ShellCard className="p-5">
+        <h2 className="text-sm font-semibold text-white">Sponsor scope</h2>
+        <p className="mt-2 text-xs text-slate-500">This role sees documents tied to the sponsor or fund platform. Client household details stay limited.</p>
+        <div className="mt-4 space-y-2">
+          {(viewer.assetIds ?? []).map((assetId) => {
+            const asset = assets.find((item) => item.privateAssetId === assetId);
+            return <Info key={assetId} label="Private asset" value={asset?.name ?? assetId} />;
+          })}
+        </div>
+      </ShellCard>
+      <ShellCard className="overflow-hidden">
+        <div className="border-b border-slate-800 px-5 py-3">
+          <h2 className="text-sm font-semibold text-white">Sponsor review queue</h2>
+        </div>
+        {docs.map((doc) => (
+          <div key={doc.tradeDocumentId} className="grid grid-cols-[1fr_0.7fr_0.7fr] items-center border-b border-slate-800/70 px-5 py-4 last:border-b-0">
+            <div>
+              <p className="text-sm font-semibold text-white">{doc.name}</p>
+              <p className="mt-1 text-xs text-slate-500">{displayLabel(doc.platform)} · {doc.dueDate ?? "No due date"}</p>
+            </div>
+            <StatusBadge value={doc.status} />
+            <button className="h-8 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">{documentPrimaryCta(doc, viewer)}</button>
+          </div>
+        ))}
+      </ShellCard>
+    </div>
   );
 }
 
@@ -1863,7 +1971,7 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
       <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
         action={canCreateDocuments ? <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />Add Document</button> : undefined}
       />
-      <DocumentViewerSwitcher viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={0} />
+      <DocumentRoleTabs viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={0} />
       <p className="mt-8 text-center text-xs text-slate-500">No documents are visible for this role.</p>
       {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
     </>
@@ -1880,11 +1988,43 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
     selectedDocument.status === "signed" ? 3 :
     (selectedDocument.status === "sent" || selectedDocument.status === "uploaded") ? 2 : 1;
 
+  const roleTabs = <DocumentRoleTabs viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={actionRequiredCount} />;
+
+  if (viewer.role === "client_signer") {
+    return (
+      <>
+        <PageTitle title="Documents" subtitle="Documents assigned to you for signature or upload" />
+        {roleTabs}
+        <ClientSignerDocumentsView docs={visibleDocs} viewer={viewer} />
+      </>
+    );
+  }
+
+  if (viewer.role === "wealth_manager") {
+    return (
+      <>
+        <PageTitle title="Documents" subtitle="Client document status across your households and accounts" />
+        {roleTabs}
+        <WealthManagerDocumentsView docs={visibleDocs} />
+      </>
+    );
+  }
+
+  if (viewer.role === "asset_sponsor") {
+    return (
+      <>
+        <PageTitle title="Documents" subtitle="Sponsor and platform review for private asset documents" />
+        {roleTabs}
+        <SponsorDocumentsView docs={visibleDocs} viewer={viewer} />
+      </>
+    );
+  }
+
   return (
     <>
       <PageTitle
-        title="Documents"
-        subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
+        title={viewer.role === "broker" ? "Broker Documents" : "Documents"}
+        subtitle={viewer.role === "broker" ? "Documents for broker-owned assets and workflow responsibilities" : "Full operations queue for trade documents and signatures"}
         action={
           canCreateDocuments ? (
           <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
@@ -1894,7 +2034,7 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
         }
       />
       <Toolbar placeholder="Search by document name, inbound trade ID, platform, type, or status..." />
-      <DocumentViewerSwitcher viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={actionRequiredCount} />
+      {roleTabs}
       <div className="grid grid-cols-[1.25fr_0.95fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
