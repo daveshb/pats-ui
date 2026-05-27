@@ -176,6 +176,15 @@ interface TradeDoc {
   platform: "manual_upload" | "docusign" | "icapital" | "umb" | "other";
   source: "ops" | "broker" | "external_platform" | "system";
   status: "pending" | "uploaded" | "sent" | "signed" | "completed" | "blocked" | "cancelled";
+  requiredActorType?: "pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor" | "external_platform";
+  requiredActorId?: string;
+  signerPersonId?: string;
+  ownerContactId?: string;
+  visibleToRoles?: ("pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor")[];
+  actionRequired?: boolean;
+  actionLabel?: string;
+  assignee?: string;
+  dueDate?: string;
   fileKey?: string;
   externalEnvelopeId?: string;
   externalUrl?: string;
@@ -185,6 +194,19 @@ interface TradeDoc {
   blockedReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+type DocumentViewerRole = "pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor";
+
+interface DocumentViewer {
+  contactId: string;
+  label: string;
+  role: DocumentViewerRole;
+  brokerIds?: string[];
+  householdIds?: string[];
+  accountIds?: string[];
+  personIds?: string[];
+  assetIds?: string[];
 }
 
 interface ExecutionFill {
@@ -265,11 +287,11 @@ const workflows = [
 type WorkflowRecord = typeof workflows[number];
 
 const tradeDocuments: TradeDoc[] = [
-  { tradeDocumentId: "tdoc_001", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_doc_001", workflowRequirementId: "wr_subscription_agreement", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", accountId: "acct-456", name: "Subscription Agreement", type: "subscription_agreement", platform: "docusign", source: "ops", status: "sent", externalEnvelopeId: "DS-44912", sentAt: "2026-05-01T14:30:00Z", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T14:30:00Z" },
-  { tradeDocumentId: "tdoc_002", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_sig_001", workflowRequirementId: "wr_investor_signature", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", name: "Investor Signature Packet", type: "signature_packet", platform: "docusign", source: "ops", status: "pending", externalEnvelopeId: "DS-44912", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T10:00:00Z" },
-  { tradeDocumentId: "tdoc_003", inboundTradeId: "it_cb41f317", tradeWorkflowId: "tw_002", tradeWorkflowStepId: "tws_notice_001", workflowRequirementId: "wr_redemption_notice", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", name: "Redemption Notice", type: "redemption_notice", platform: "manual_upload", source: "ops", status: "blocked", blockedReason: "Required file not uploaded — contact Ops team to provide the signed notice", createdAt: "2026-05-01T09:00:00Z", updatedAt: "2026-05-01T11:00:00Z" },
-  { tradeDocumentId: "tdoc_004", inboundTradeId: "it_a71e6d82", tradeWorkflowStepId: "tws_tax_001", workflowRequirementId: "wr_tax_package", patsBrokerProfileId: "pbp_jpm", privateAssetId: "pa_energy_c", name: "Tax Package", type: "tax_document", platform: "umb", source: "broker", status: "pending", createdAt: "2026-05-01T08:00:00Z", updatedAt: "2026-05-01T08:00:00Z" },
-  { tradeDocumentId: "tdoc_005", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sub_002", workflowRequirementId: "wr_icap_sub", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", name: "iCapital Subscription Package", type: "subscription_agreement", platform: "icapital", source: "external_platform", status: "uploaded", fileKey: "icap/tdoc_005/subscription.pdf", createdAt: "2026-05-01T07:30:00Z", updatedAt: "2026-05-01T13:00:00Z" },
+  { tradeDocumentId: "tdoc_001", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_doc_001", workflowRequirementId: "wr_subscription_agreement", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", accountId: "acc_001", name: "Subscription Agreement", type: "subscription_agreement", platform: "docusign", source: "system", status: "sent", requiredActorType: "client_signer", requiredActorId: "per_001", signerPersonId: "per_001", visibleToRoles: ["pats_ops", "broker", "wealth_manager", "client_signer"], actionRequired: true, actionLabel: "Sign document", assignee: "Sarah Chen", dueDate: "2026-05-22", externalEnvelopeId: "DS-44912", externalUrl: "https://demo.docusign.net/signing/example", sentAt: "2026-05-01T14:30:00Z", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T14:30:00Z" },
+  { tradeDocumentId: "tdoc_002", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_sig_001", workflowRequirementId: "wr_investor_signature", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", accountId: "acc_001", name: "Investor Signature Packet", type: "signature_packet", platform: "docusign", source: "system", status: "pending", requiredActorType: "broker", requiredActorId: "pbp_gsas", signerPersonId: "per_001", visibleToRoles: ["pats_ops", "broker", "wealth_manager"], actionRequired: true, actionLabel: "Prepare envelope", assignee: "Goldman broker", dueDate: "2026-05-21", externalEnvelopeId: "DS-44912", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T10:00:00Z" },
+  { tradeDocumentId: "tdoc_003", inboundTradeId: "it_cb41f317", tradeWorkflowId: "tw_002", tradeWorkflowStepId: "tws_notice_001", workflowRequirementId: "wr_redemption_notice", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", accountId: "acc_002", name: "Redemption Notice", type: "redemption_notice", platform: "manual_upload", source: "ops", status: "blocked", requiredActorType: "pats_ops", requiredActorId: "ops_pats", visibleToRoles: ["pats_ops", "broker"], actionRequired: true, actionLabel: "Review blocker", assignee: "PATS Ops", dueDate: "2026-05-20", blockedReason: "Required file not uploaded - contact Ops team to provide the signed notice", createdAt: "2026-05-01T09:00:00Z", updatedAt: "2026-05-01T11:00:00Z" },
+  { tradeDocumentId: "tdoc_004", inboundTradeId: "it_a71e6d82", tradeWorkflowStepId: "tws_tax_001", workflowRequirementId: "wr_tax_package", patsBrokerProfileId: "pbp_jpm", privateAssetId: "pa_energy_c", accountId: "acc_003", name: "Tax Package", type: "tax_document", platform: "umb", source: "broker", status: "pending", requiredActorType: "broker", requiredActorId: "pbp_jpm", visibleToRoles: ["pats_ops", "broker", "wealth_manager"], actionRequired: true, actionLabel: "Prepare tax package", assignee: "JP Morgan Private Markets", dueDate: "2026-05-24", createdAt: "2026-05-01T08:00:00Z", updatedAt: "2026-05-01T08:00:00Z" },
+  { tradeDocumentId: "tdoc_005", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sub_002", workflowRequirementId: "wr_icap_sub", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", accountId: "acc_004", name: "iCapital Subscription Package", type: "subscription_agreement", platform: "icapital", source: "external_platform", status: "uploaded", requiredActorType: "external_platform", requiredActorId: "icapital", visibleToRoles: ["pats_ops", "broker", "wealth_manager", "asset_sponsor"], actionRequired: true, actionLabel: "Send package", assignee: "iCapital", dueDate: "2026-05-23", fileKey: "icap/tdoc_005/subscription.pdf", createdAt: "2026-05-01T07:30:00Z", updatedAt: "2026-05-01T13:00:00Z" },
 ];
 
 const workflowSteps = [
@@ -288,6 +310,14 @@ const workflowRequirements = [
   { workflowRequirementId: "wr_icap_sub", name: "iCapital subscription package" },
   { workflowRequirementId: "wr_accreditation", name: "Investor accreditation letter" },
   { workflowRequirementId: "wr_kyc_docs", name: "KYC documentation" },
+];
+
+const documentViewers: DocumentViewer[] = [
+  { contactId: "ops_pats", label: "PATS Ops", role: "pats_ops" },
+  { contactId: "broker_gsas", label: "Goldman broker", role: "broker", brokerIds: ["pbp_gsas"] },
+  { contactId: "wm_chen", label: "Wealth manager", role: "wealth_manager", householdIds: ["hh_001"], accountIds: ["acc_001", "acc_002"] },
+  { contactId: "per_001", label: "Client signer", role: "client_signer", householdIds: ["hh_001"], accountIds: ["acc_001", "acc_002"], personIds: ["per_001"] },
+  { contactId: "sponsor_techcorp", label: "Asset sponsor", role: "asset_sponsor", assetIds: ["pa_tech_a"] },
 ];
 
 const workflowReviewChecks = [
@@ -500,6 +530,48 @@ function displayLabel(value: string) {
 function personDisplayName(p: HouseholdPerson): string {
   if (p.entityType === "human") return `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim();
   return p.entityName ?? "—";
+}
+
+function actorLabel(doc: TradeDoc) {
+  if (doc.assignee) return doc.assignee;
+  if (doc.requiredActorType) return displayLabel(doc.requiredActorType);
+  return "Unassigned";
+}
+
+function documentVisibleToViewer(doc: TradeDoc, viewer: DocumentViewer) {
+  if (viewer.role === "pats_ops") return true;
+  if (doc.visibleToRoles && !doc.visibleToRoles.includes(viewer.role)) return false;
+  if (viewer.brokerIds?.includes(doc.patsBrokerProfileId ?? "")) return true;
+  if (viewer.accountIds?.includes(doc.accountId ?? "")) return true;
+  if (viewer.personIds?.includes(doc.signerPersonId ?? "")) return true;
+  if (viewer.assetIds?.includes(doc.privateAssetId ?? "")) return true;
+  return false;
+}
+
+function documentCanCreate(viewer: DocumentViewer) {
+  return viewer.role === "pats_ops" || viewer.role === "broker" || viewer.role === "asset_sponsor";
+}
+
+function documentCanOperate(doc: TradeDoc, viewer: DocumentViewer) {
+  if (viewer.role === "pats_ops") return true;
+  if (viewer.role === "broker" && viewer.brokerIds?.includes(doc.patsBrokerProfileId ?? "")) return true;
+  if (viewer.role === "asset_sponsor" && viewer.assetIds?.includes(doc.privateAssetId ?? "")) return doc.requiredActorType === "asset_sponsor";
+  return false;
+}
+
+function documentCanSignerAct(doc: TradeDoc, viewer: DocumentViewer) {
+  return viewer.role === "client_signer" && viewer.personIds?.includes(doc.signerPersonId ?? "");
+}
+
+function documentPrimaryCta(doc: TradeDoc, viewer: DocumentViewer) {
+  if (documentCanSignerAct(doc, viewer)) {
+    if (doc.platform === "manual_upload") return "Upload file";
+    if (doc.status === "sent" && doc.externalUrl) return "Sign document";
+    return doc.actionLabel ?? "Complete assigned action";
+  }
+  if (documentCanOperate(doc, viewer)) return doc.actionLabel ?? documentNextAction(doc);
+  if (viewer.role === "wealth_manager") return doc.actionRequired ? "Follow up" : "View status";
+  return "View status";
 }
 
 function entityTypeLabel(t: HouseholdPerson["entityType"]): string {
@@ -1729,6 +1801,7 @@ function DocumentsLegacy() {
 }
 
 function documentNextAction(doc: TradeDoc) {
+  if (doc.actionLabel && doc.actionRequired) return doc.actionLabel;
   if (doc.status === "pending") return doc.platform === "manual_upload" ? "Upload file" : "Send for signature";
   if (doc.status === "uploaded") return "Send for signature";
   if (doc.status === "sent") return "Waiting for signature";
@@ -1747,23 +1820,52 @@ function documentPrimaryAction(doc: TradeDoc) {
   return "Open document";
 }
 
+function DocumentViewerSwitcher({ viewer, onChange, actionCount }: { viewer: DocumentViewer; onChange: (id: string) => void; actionCount: number }) {
+  return (
+    <ShellCard className="mb-5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-slate-100">Viewing documents as {viewer.label}</p>
+          <p className="mt-1 text-[11px] text-slate-500">Contacts decides the point of view. The UI only shows documents and actions this role can access.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {actionCount > 0 && <StatusBadge value={`${actionCount} pending actions`} tone="yellow" />}
+          <select className={compactInputClass} value={viewer.contactId} onChange={(e) => onChange(e.target.value)}>
+            {documentViewers.map((candidate) => (
+              <option key={candidate.contactId} value={candidate.contactId}>{candidate.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </ShellCard>
+  );
+}
+
 function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc: (d: TradeDoc) => void; onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void }) {
   const [selectedDocumentId, setSelectedDocumentId] = useState(docs[0]?.tradeDocumentId ?? "");
   const [addDocOpen, setAddDocOpen] = useState(false);
   const [blockInput, setBlockInput] = useState("");
   const [showBlockInput, setShowBlockInput] = useState(false);
-  const selectedDocument = docs.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? docs[0];
+  const [viewerId, setViewerId] = useState(documentViewers[0].contactId);
+  const viewer = documentViewers.find((v) => v.contactId === viewerId) ?? documentViewers[0];
+  const visibleDocs = docs.filter((doc) => documentVisibleToViewer(doc, viewer));
+  const actionRequiredCount = visibleDocs.filter((doc) => doc.actionRequired && doc.status !== "completed" && doc.status !== "cancelled").length;
+  const selectedDocument = visibleDocs.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? visibleDocs[0];
   const relatedTrade = trades.find((trade) => trade.inboundTradeId === selectedDocument?.inboundTradeId);
   const relatedAsset = assets.find((a) => a.privateAssetId === selectedDocument?.privateAssetId);
   const relatedBroker = brokers.find((b) => b.patsBrokerProfileId === selectedDocument?.patsBrokerProfileId);
+  const canCreateDocuments = documentCanCreate(viewer);
+  const canOperateSelected = selectedDocument ? documentCanOperate(selectedDocument, viewer) : false;
+  const canActAsSigner = selectedDocument ? documentCanSignerAct(selectedDocument, viewer) : false;
 
   if (!selectedDocument) return (
     <>
       <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
-        action={<button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />Add Document</button>}
+        action={canCreateDocuments ? <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />Add Document</button> : undefined}
       />
-      <p className="mt-8 text-center text-xs text-slate-500">No documents yet. Add one to get started.</p>
-      {addDocOpen && <AddDocumentPanel onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
+      <DocumentViewerSwitcher viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={0} />
+      <p className="mt-8 text-center text-xs text-slate-500">No documents are visible for this role.</p>
+      {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
     </>
   );
 
@@ -1784,43 +1886,48 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
         title="Documents"
         subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
         action={
+          canCreateDocuments ? (
           <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
             <Plus className="h-3.5 w-3.5" />Add Document
           </button>
+          ) : undefined
         }
       />
       <Toolbar placeholder="Search by document name, inbound trade ID, platform, type, or status..." />
+      <DocumentViewerSwitcher viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={actionRequiredCount} />
       <div className="grid grid-cols-[1.25fr_0.95fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
             <h2 className="text-sm font-semibold text-slate-100">Document queue</h2>
             <p className="mt-1 text-[11px] text-slate-500">Each item is tied to a TradeWorkflowStep. Completing it unblocks the workflow.</p>
           </div>
-          <div className="grid grid-cols-[1.3fr_0.85fr_0.75fr_0.65fr_0.95fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
+          <div className="grid grid-cols-[1.2fr_0.75fr_0.8fr_0.7fr_0.7fr_0.95fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
             <span>Document</span>
             <span>Type</span>
-            <span>Platform</span>
+            <span>Responsible</span>
+            <span>Due</span>
             <span>Status</span>
             <span>Next action</span>
           </div>
           <div className="divide-y divide-slate-800/80">
-            {docs.map((doc) => {
+            {visibleDocs.map((doc) => {
               const isSelected = doc.tradeDocumentId === selectedDocument.tradeDocumentId;
               const docAsset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
               return (
                 <button
                   key={doc.tradeDocumentId}
                   onClick={() => { setSelectedDocumentId(doc.tradeDocumentId); setShowBlockInput(false); }}
-                  className={`grid w-full grid-cols-[1.3fr_0.85fr_0.75fr_0.65fr_0.95fr] items-center px-5 py-4 text-left text-sm transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
+                  className={`grid w-full grid-cols-[1.2fr_0.75fr_0.8fr_0.7fr_0.7fr_0.95fr] items-center px-5 py-4 text-left text-sm transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
                 >
                   <span>
                     <span className="block font-semibold text-slate-100">{doc.name}</span>
                     <span className="mt-0.5 block text-[11px] text-slate-500">{docAsset?.name ?? doc.inboundTradeId}</span>
                   </span>
                   <span><StatusBadge value={displayLabel(doc.type)} tone="gray" /></span>
-                  <span className="text-xs text-slate-300">{displayLabel(doc.platform)}</span>
+                  <span className="text-xs text-slate-300">{actorLabel(doc)}</span>
+                  <span className="text-xs text-slate-400">{doc.dueDate ?? "-"}</span>
                   <span><StatusBadge value={doc.status} /></span>
-                  <span className="text-xs font-semibold text-sky-300">{documentNextAction(doc)}</span>
+                  <span className={`text-xs font-semibold ${doc.actionRequired ? "text-amber-200" : "text-sky-300"}`}>{documentPrimaryCta(doc, viewer)}</span>
                 </button>
               );
             })}
@@ -1840,7 +1947,13 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
               <Info label="Type" value={displayLabel(selectedDocument.type)} />
               <Info label="Platform" value={displayLabel(selectedDocument.platform)} />
               <Info label="Source" value={displayLabel(selectedDocument.source)} />
+              <Info label="Responsible" value={actorLabel(selectedDocument)} />
+              <Info label="Required actor" value={displayLabel(selectedDocument.requiredActorType ?? "not assigned")} />
+              <Info label="Due date" value={selectedDocument.dueDate ?? "Not set"} />
+              <Info label="Action required" value={selectedDocument.actionRequired ? "Yes" : "No"} />
               <Info label="Inbound trade" value={selectedDocument.inboundTradeId} />
+              {selectedDocument.accountId && <Info label="Account" value={selectedDocument.accountId} />}
+              {selectedDocument.signerPersonId && <Info label="Signer" value={personDisplayName(householdPersons.find((p) => p.personId === selectedDocument.signerPersonId) ?? householdPersons[0])} />}
               {selectedDocument.tradeWorkflowId && <Info label="Trade workflow" value={selectedDocument.tradeWorkflowId} />}
               {selectedDocument.externalEnvelopeId && <Info label="Envelope ID" value={selectedDocument.externalEnvelopeId} />}
               {selectedDocument.sentAt && <Info label="Sent at" value={new Date(selectedDocument.sentAt).toLocaleString()} />}
@@ -1882,7 +1995,14 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
 
           <ShellCard className="p-5">
             <h2 className="text-sm font-semibold text-white">Actions</h2>
-            {showBlockInput && (
+            <p className="mt-1 text-xs text-slate-500">
+              {canOperateSelected
+                ? "Operational actions are available for this role."
+                : canActAsSigner
+                  ? "This signer only sees the action needed to move the document forward."
+                  : "This role can monitor status, but operational controls are hidden."}
+            </p>
+            {showBlockInput && canOperateSelected && (
               <div className="mt-3 flex gap-2">
                 <input
                   className="h-9 flex-1 rounded-md border border-rose-400/30 bg-rose-400/5 px-3 text-xs text-rose-200 outline-none placeholder:text-rose-400/40"
@@ -1898,35 +2018,38 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
             )}
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <button
-                className={`h-9 rounded-md border text-xs font-semibold ${selectedDocument.platform === "manual_upload" ? "border-slate-800 bg-slate-900 text-slate-400 opacity-50 cursor-not-allowed" : "border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800"}`}
-                disabled={selectedDocument.platform === "manual_upload"}
-                onClick={() => alert(`Opening ${displayLabel(selectedDocument.platform)}...`)}
-              >{documentPrimaryAction(selectedDocument)}</button>
-              <button
-                disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
-                onClick={() => onUpdateDoc(selectedDocument.tradeDocumentId, { status: "completed", completedAt: new Date().toISOString() })}
-                className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30 disabled:opacity-40"
-              >Complete document</button>
-              <button
-                disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
-                onClick={() => setShowBlockInput(v => !v)}
-                className={`h-9 rounded-md border text-xs font-semibold disabled:opacity-40 ${showBlockInput ? "border-rose-400/50 bg-rose-400/20 text-rose-300" : "border-rose-400/30 bg-rose-400/10 text-rose-300"}`}
-              >{showBlockInput ? "Cancel block" : "Block with reason"}</button>
-              <button
-                disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
-                onClick={() => { onUpdateDoc(selectedDocument.tradeDocumentId, { status: "cancelled" }); setShowBlockInput(false); }}
-                className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400 disabled:opacity-40"
-              >Cancel document</button>
+                className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                onClick={() => alert(`${documentPrimaryCta(selectedDocument, viewer)} for ${selectedDocument.name}`)}
+              >{documentPrimaryCta(selectedDocument, viewer)}</button>
+              {canOperateSelected && (
+                <>
+                  <button
+                    disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
+                    onClick={() => onUpdateDoc(selectedDocument.tradeDocumentId, { status: "completed", completedAt: new Date().toISOString(), actionRequired: false })}
+                    className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30 disabled:opacity-40"
+                  >Complete document</button>
+                  <button
+                    disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
+                    onClick={() => setShowBlockInput(v => !v)}
+                    className={`h-9 rounded-md border text-xs font-semibold disabled:opacity-40 ${showBlockInput ? "border-rose-400/50 bg-rose-400/20 text-rose-300" : "border-rose-400/30 bg-rose-400/10 text-rose-300"}`}
+                  >{showBlockInput ? "Cancel block" : "Block with reason"}</button>
+                  <button
+                    disabled={selectedDocument.status === "completed" || selectedDocument.status === "cancelled"}
+                    onClick={() => { onUpdateDoc(selectedDocument.tradeDocumentId, { status: "cancelled", actionRequired: false }); setShowBlockInput(false); }}
+                    className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400 disabled:opacity-40"
+                  >Cancel document</button>
+                </>
+              )}
             </div>
           </ShellCard>
         </div>
       </div>
-      {addDocOpen && <AddDocumentPanel onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
+      {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
     </>
   );
 }
 
-function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; onClose: () => void }) {
+function AddDocumentPanel({ viewer, onAdd, onClose }: { viewer: DocumentViewer; onAdd: (d: TradeDoc) => void; onClose: () => void }) {
   const [selectedTradeId, setSelectedTradeId] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("manual_upload");
   const [dragOver, setDragOver] = useState(false);
@@ -1936,6 +2059,9 @@ function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; on
   const [selectedStepId, setSelectedStepId] = useState("");
   const [selectedReqId, setSelectedReqId] = useState("");
   const [docSource, setDocSource] = useState<TradeDoc["source"]>("ops");
+  const [requiredActorType, setRequiredActorType] = useState<NonNullable<TradeDoc["requiredActorType"]>>(viewer.role === "broker" ? "broker" : "client_signer");
+  const [assignee, setAssignee] = useState(viewer.role === "broker" ? viewer.label : "");
+  const [dueDate, setDueDate] = useState("");
   const stepsForTrade = selectedTradeId
     ? workflowSteps.filter((s) => s.inboundTradeId === selectedTradeId)
     : workflowSteps;
@@ -1955,6 +2081,14 @@ function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; on
       platform: selectedPlatform as TradeDoc["platform"],
       source: docSource,
       status: "pending",
+      requiredActorType,
+      requiredActorId: requiredActorType === "broker" ? viewer.brokerIds?.[0] : requiredActorType === "client_signer" ? "per_001" : viewer.contactId,
+      signerPersonId: requiredActorType === "client_signer" ? "per_001" : undefined,
+      visibleToRoles: ["pats_ops", "broker", "wealth_manager", requiredActorType === "client_signer" ? "client_signer" : "asset_sponsor"],
+      actionRequired: true,
+      actionLabel: requiredActorType === "client_signer" ? "Sign document" : requiredActorType === "broker" ? "Prepare document" : "Review document",
+      assignee: assignee.trim() || displayLabel(requiredActorType),
+      dueDate: dueDate || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -2068,6 +2202,21 @@ function AddDocumentPanel({ onAdd, onClose }: { onAdd: (d: TradeDoc) => void; on
                   <option value="external_platform">External platform</option>
                   <option value="system">System</option>
                 </select>
+              </FormField>
+              <FormField label="Required actor">
+                <select className={compactInputClass} value={requiredActorType} onChange={e => setRequiredActorType(e.target.value as NonNullable<TradeDoc["requiredActorType"]>)}>
+                  <option value="client_signer">Client signer</option>
+                  <option value="broker">Broker</option>
+                  <option value="pats_ops">PATS Ops</option>
+                  <option value="asset_sponsor">Asset sponsor</option>
+                  <option value="external_platform">External platform</option>
+                </select>
+              </FormField>
+              <FormField label="Assignee">
+                <input className={compactInputClass} placeholder="Sarah Chen, PATS Ops, Broker desk..." value={assignee} onChange={e => setAssignee(e.target.value)} />
+              </FormField>
+              <FormField label="Due date">
+                <input className={compactInputClass} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
               </FormField>
             </div>
           </div>
