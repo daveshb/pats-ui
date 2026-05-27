@@ -292,6 +292,8 @@ const tradeDocuments: TradeDoc[] = [
   { tradeDocumentId: "tdoc_003", inboundTradeId: "it_cb41f317", tradeWorkflowId: "tw_002", tradeWorkflowStepId: "tws_notice_001", workflowRequirementId: "wr_redemption_notice", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", accountId: "acc_002", name: "Redemption Notice", type: "redemption_notice", platform: "manual_upload", source: "ops", status: "blocked", requiredActorType: "pats_ops", requiredActorId: "ops_pats", visibleToRoles: ["pats_ops", "broker"], actionRequired: true, actionLabel: "Review blocker", assignee: "PATS Ops", dueDate: "2026-05-20", blockedReason: "Required file not uploaded - contact Ops team to provide the signed notice", createdAt: "2026-05-01T09:00:00Z", updatedAt: "2026-05-01T11:00:00Z" },
   { tradeDocumentId: "tdoc_004", inboundTradeId: "it_a71e6d82", tradeWorkflowStepId: "tws_tax_001", workflowRequirementId: "wr_tax_package", patsBrokerProfileId: "pbp_jpm", privateAssetId: "pa_energy_c", accountId: "acc_003", name: "Tax Package", type: "tax_document", platform: "umb", source: "broker", status: "pending", requiredActorType: "broker", requiredActorId: "pbp_jpm", visibleToRoles: ["pats_ops", "broker", "wealth_manager"], actionRequired: true, actionLabel: "Prepare tax package", assignee: "JP Morgan Private Markets", dueDate: "2026-05-24", createdAt: "2026-05-01T08:00:00Z", updatedAt: "2026-05-01T08:00:00Z" },
   { tradeDocumentId: "tdoc_005", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sub_002", workflowRequirementId: "wr_icap_sub", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", accountId: "acc_004", name: "iCapital Subscription Package", type: "subscription_agreement", platform: "icapital", source: "external_platform", status: "uploaded", requiredActorType: "external_platform", requiredActorId: "icapital", visibleToRoles: ["pats_ops", "broker", "wealth_manager", "asset_sponsor"], actionRequired: true, actionLabel: "Send package", assignee: "iCapital", dueDate: "2026-05-23", fileKey: "icap/tdoc_005/subscription.pdf", createdAt: "2026-05-01T07:30:00Z", updatedAt: "2026-05-01T13:00:00Z" },
+  { tradeDocumentId: "tdoc_006", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_kyc_001", workflowRequirementId: "wr_kyc_docs", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", accountId: "acc_001", name: "Accredited Investor Letter", type: "supporting_document", platform: "manual_upload", source: "system", status: "pending", requiredActorType: "client_signer", requiredActorId: "per_001", signerPersonId: "per_001", visibleToRoles: ["pats_ops", "broker", "wealth_manager", "client_signer"], actionRequired: true, actionLabel: "Upload letter", assignee: "Sarah Chen", dueDate: "2026-05-25", createdAt: "2026-05-01T10:15:00Z", updatedAt: "2026-05-01T10:15:00Z" },
+  { tradeDocumentId: "tdoc_007", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sponsor_001", workflowRequirementId: "wr_accreditation", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", accountId: "acc_004", name: "Sponsor Acceptance Memo", type: "supporting_document", platform: "other", source: "broker", status: "pending", requiredActorType: "asset_sponsor", requiredActorId: "sponsor_techcorp", visibleToRoles: ["pats_ops", "wealth_manager", "asset_sponsor"], actionRequired: true, actionLabel: "Review memo", assignee: "FinTech Capital", dueDate: "2026-05-26", createdAt: "2026-05-01T10:20:00Z", updatedAt: "2026-05-01T10:20:00Z" },
 ];
 
 const workflowSteps = [
@@ -315,9 +317,9 @@ const workflowRequirements = [
 const documentViewers: DocumentViewer[] = [
   { contactId: "ops_pats", label: "PATS Ops", role: "pats_ops" },
   { contactId: "broker_gsas", label: "Goldman broker", role: "broker", brokerIds: ["pbp_gsas"] },
-  { contactId: "wm_chen", label: "Wealth manager", role: "wealth_manager", householdIds: ["hh_001"], accountIds: ["acc_001", "acc_002"] },
+  { contactId: "wm_chen", label: "Wealth manager", role: "wealth_manager", householdIds: ["hh_001", "hh_002"], accountIds: ["acc_001", "acc_002", "acc_003", "acc_004"] },
   { contactId: "per_001", label: "Client signer", role: "client_signer", householdIds: ["hh_001"], accountIds: ["acc_001", "acc_002"], personIds: ["per_001"] },
-  { contactId: "sponsor_techcorp", label: "Asset sponsor", role: "asset_sponsor", assetIds: ["pa_tech_a"] },
+  { contactId: "sponsor_techcorp", label: "Asset sponsor", role: "asset_sponsor", assetIds: ["pa_tech_a", "pa_fintech_d"] },
 ];
 
 const workflowReviewChecks = [
@@ -1847,13 +1849,21 @@ function DocumentRoleTabs({ viewer, onChange, actionCount }: { viewer: DocumentV
 }
 
 function ClientSignerDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer: DocumentViewer }) {
+  const pendingDocs = docs.filter((doc) => doc.status !== "completed" && doc.status !== "cancelled");
+  const completedDocs = docs.filter((doc) => doc.status === "completed");
+
   return (
-    <div className="grid grid-cols-[1fr_0.7fr] gap-5">
+    <div className="grid grid-cols-[1fr_0.72fr] gap-5">
       <ShellCard className="p-5">
-        <h2 className="text-lg font-semibold text-white">Documents that need your action</h2>
-        <p className="mt-1 text-xs text-slate-500">This view is intentionally simple for the person signing or uploading documents.</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Your document tasks</h2>
+            <p className="mt-1 text-xs text-slate-500">Simple signing and upload view. No workflow IDs, broker controls, or ops-only actions.</p>
+          </div>
+          <StatusBadge value={`${pendingDocs.length} open`} tone={pendingDocs.length ? "yellow" : "green"} />
+        </div>
         <div className="mt-5 space-y-3">
-          {docs.map((doc) => {
+          {pendingDocs.map((doc) => {
             const asset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
             return (
               <div key={doc.tradeDocumentId} className="rounded-lg border border-slate-800 bg-slate-950/35 p-4">
@@ -1864,6 +1874,9 @@ function ClientSignerDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer:
                   </div>
                   <StatusBadge value={doc.status} />
                 </div>
+                <div className="mt-3 rounded-md border border-slate-800 bg-[#0d1117] px-3 py-2 text-xs text-slate-400">
+                  {doc.platform === "manual_upload" ? "Upload the requested file so Ops can review it." : "Open the signing link and complete the envelope."}
+                </div>
                 <button className="mt-4 h-10 w-full rounded-md bg-sky-500 text-sm font-semibold text-white shadow-lg shadow-sky-950/30">
                   {documentPrimaryCta(doc, viewer)}
                 </button>
@@ -1871,14 +1884,27 @@ function ClientSignerDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer:
             );
           })}
         </div>
+        {completedDocs.length > 0 && (
+          <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4">
+            <p className="text-sm font-semibold text-emerald-200">{completedDocs.length} completed document{completedDocs.length === 1 ? "" : "s"}</p>
+            <p className="mt-1 text-xs text-emerald-300/70">Completed items stay visible as confirmation, but no action is needed.</p>
+          </div>
+        )}
       </ShellCard>
       <ShellCard className="p-5">
-        <h2 className="text-sm font-semibold text-white">What the client sees</h2>
-        <div className="mt-4 space-y-3 text-xs text-slate-400">
-          <p>No raw workflow IDs.</p>
-          <p>No broker operations controls.</p>
-          <p>Only the documents assigned to this signer.</p>
-          <p>Clear red/amber action state when something is pending.</p>
+        <h2 className="text-sm font-semibold text-white">Signing progress</h2>
+        <div className="mt-4 space-y-3">
+          {[
+            ["Review request", true],
+            ["Sign or upload", pendingDocs.length === 0],
+            ["Ops verifies", docs.some((doc) => doc.status === "signed" || doc.status === "completed")],
+            ["Done", pendingDocs.length === 0],
+          ].map(([label, done]) => (
+            <div key={String(label)} className="flex items-center gap-3 rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${done ? "bg-emerald-400" : "bg-amber-300"}`} />
+              <span className="text-xs font-semibold text-slate-200">{label}</span>
+            </div>
+          ))}
         </div>
       </ShellCard>
     </div>
@@ -1886,12 +1912,39 @@ function ClientSignerDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer:
 }
 
 function WealthManagerDocumentsView({ docs }: { docs: TradeDoc[] }) {
+  const accountIds = Array.from(new Set(docs.map((doc) => doc.accountId).filter(Boolean)));
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-4">
         <MetricCard label="Client documents" value={`${docs.length}`} />
         <MetricCard label="Need action" value={`${docs.filter((doc) => doc.actionRequired).length}`} />
         <MetricCard label="Blocked" value={`${docs.filter((doc) => doc.status === "blocked").length}`} />
+      </div>
+      <div className="grid grid-cols-2 gap-5">
+        {accountIds.map((accountId) => {
+          const accountDocs = docs.filter((doc) => doc.accountId === accountId);
+          const open = accountDocs.filter((doc) => doc.status !== "completed" && doc.status !== "cancelled").length;
+          return (
+            <ShellCard key={accountId} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">{accountId}</p>
+                  <p className="mt-1 text-xs text-slate-500">Household follow-up package</p>
+                </div>
+                <StatusBadge value={open ? `${open} open` : "clear"} tone={open ? "yellow" : "green"} />
+              </div>
+              <div className="mt-4 space-y-2">
+                {accountDocs.slice(0, 3).map((doc) => (
+                  <div key={doc.tradeDocumentId} className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2">
+                    <span className="text-xs font-semibold text-slate-200">{doc.name}</span>
+                    <StatusBadge value={doc.status} />
+                  </div>
+                ))}
+              </div>
+            </ShellCard>
+          );
+        })}
       </div>
       <ShellCard className="overflow-hidden">
         <div className="border-b border-slate-800 px-5 py-3">
@@ -1929,13 +1982,18 @@ function SponsorDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer: Docu
             return <Info key={assetId} label="Private asset" value={asset?.name ?? assetId} />;
           })}
         </div>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Info label="Review queue" value={`${docs.filter((doc) => doc.actionRequired).length} open`} />
+          <Info label="Client data" value="Limited" />
+        </div>
       </ShellCard>
       <ShellCard className="overflow-hidden">
         <div className="border-b border-slate-800 px-5 py-3">
           <h2 className="text-sm font-semibold text-white">Sponsor review queue</h2>
+          <p className="mt-1 text-[11px] text-slate-500">Focused on fund acceptance, platform package status, and sponsor-side approvals.</p>
         </div>
         {docs.map((doc) => (
-          <div key={doc.tradeDocumentId} className="grid grid-cols-[1fr_0.7fr_0.7fr] items-center border-b border-slate-800/70 px-5 py-4 last:border-b-0">
+          <div key={doc.tradeDocumentId} className="grid grid-cols-[1fr_0.65fr_0.65fr_0.7fr] items-center border-b border-slate-800/70 px-5 py-4 last:border-b-0">
             <div>
               <p className="text-sm font-semibold text-white">{doc.name}</p>
               <p className="mt-1 text-xs text-slate-500">{displayLabel(doc.platform)} · {doc.dueDate ?? "No due date"}</p>
@@ -1945,6 +2003,114 @@ function SponsorDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer: Docu
           </div>
         ))}
       </ShellCard>
+    </div>
+  );
+}
+
+function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: TradeDoc[]; viewer: DocumentViewer; onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void; onAddDoc: () => void }) {
+  const broker = brokers.find((item) => viewer.brokerIds?.includes(item.patsBrokerProfileId));
+  const ownedAssets = assets.filter((asset) => viewer.brokerIds?.includes(asset.patsBrokerProfileId));
+  const actionDocs = docs.filter((doc) => documentCanOperate(doc, viewer) && doc.status !== "completed" && doc.status !== "cancelled");
+  const waitingDocs = docs.filter((doc) => !documentCanOperate(doc, viewer) && doc.status !== "completed" && doc.status !== "cancelled");
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-[0.9fr_1.1fr] gap-5">
+        <ShellCard className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-white">{broker?.name ?? viewer.label}</h2>
+              <p className="mt-1 text-xs text-slate-500">Broker workbench for documents this broker owns or must prepare.</p>
+            </div>
+            <StatusBadge value={broker?.status ?? "active"} />
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Info label="Owned assets" value={`${ownedAssets.length}`} />
+            <Info label="Broker actions" value={`${actionDocs.length}`} />
+            <Info label="Waiting on others" value={`${waitingDocs.length}`} />
+            <Info label="Fill return" value={broker?.fillReturn ?? "Not set"} />
+          </div>
+          <button onClick={onAddDoc} className="mt-4 flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
+            <Plus className="h-3.5 w-3.5" /> Add broker document
+          </button>
+        </ShellCard>
+
+        <ShellCard className="p-5">
+          <h2 className="text-base font-semibold text-white">Broker-owned assets</h2>
+          <p className="mt-1 text-xs text-slate-500">The broker only sees documents in its relationship scope.</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {ownedAssets.map((asset) => (
+              <div key={asset.privateAssetId} className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{asset.name}</p>
+                    <p className="mt-1 text-xs text-sky-300">{asset.ticker}</p>
+                  </div>
+                  <StatusBadge value={asset.status} />
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500">{asset.documentExecutionPlatform} documents - {asset.taxDocumentSource} tax source</p>
+              </div>
+            ))}
+          </div>
+        </ShellCard>
+      </div>
+
+      <div className="grid grid-cols-[1fr_1fr] gap-5">
+        <ShellCard className="overflow-hidden">
+          <div className="border-b border-slate-800 px-5 py-3">
+            <h2 className="text-sm font-semibold text-white">Broker action queue</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Prepare envelopes, upload broker files, and send packages owned by this broker.</p>
+          </div>
+          <div className="divide-y divide-slate-800/70">
+            {actionDocs.map((doc) => {
+              const asset = assets.find((item) => item.privateAssetId === doc.privateAssetId);
+              return (
+                <div key={doc.tradeDocumentId} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{doc.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{asset?.name ?? "Private asset"} - due {doc.dueDate ?? "not set"}</p>
+                    </div>
+                    <StatusBadge value={doc.status} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button className="h-8 rounded-md bg-sky-500 text-xs font-semibold text-white">{documentPrimaryCta(doc, viewer)}</button>
+                    <button
+                      onClick={() => onUpdateDoc(doc.tradeDocumentId, { status: "sent", sentAt: new Date().toISOString(), actionLabel: "Waiting for signature", actionRequired: false })}
+                      className="h-8 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200"
+                    >
+                      Mark sent
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {actionDocs.length === 0 && <p className="p-5 text-xs text-slate-500">No broker-owned document actions right now.</p>}
+          </div>
+        </ShellCard>
+
+        <ShellCard className="overflow-hidden">
+          <div className="border-b border-slate-800 px-5 py-3">
+            <h2 className="text-sm font-semibold text-white">Waiting on client or Ops</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Visible to the broker, but not directly controlled by the broker.</p>
+          </div>
+          <div className="divide-y divide-slate-800/70">
+            {waitingDocs.map((doc) => {
+              const asset = assets.find((item) => item.privateAssetId === doc.privateAssetId);
+              return (
+                <div key={doc.tradeDocumentId} className="grid grid-cols-[1fr_auto] items-center gap-3 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{doc.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">{asset?.name ?? "Private asset"} - responsible: {actorLabel(doc)}</p>
+                  </div>
+                  <StatusBadge value={doc.status} />
+                </div>
+              );
+            })}
+            {waitingDocs.length === 0 && <p className="p-5 text-xs text-slate-500">Nothing is waiting on another party.</p>}
+          </div>
+        </ShellCard>
+      </div>
     </div>
   );
 }
@@ -2020,11 +2186,26 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
     );
   }
 
+  if (viewer.role === "broker") {
+    return (
+      <>
+        <PageTitle
+          title="Broker Documents"
+          subtitle="Broker-owned document workbench for private asset workflows"
+        />
+        <Toolbar placeholder="Search broker documents, asset, signer, platform, or status..." />
+        {roleTabs}
+        <BrokerDocumentsView docs={visibleDocs} viewer={viewer} onUpdateDoc={onUpdateDoc} onAddDoc={() => setAddDocOpen(true)} />
+        {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
+      </>
+    );
+  }
+
   return (
     <>
       <PageTitle
-        title={viewer.role === "broker" ? "Broker Documents" : "Documents"}
-        subtitle={viewer.role === "broker" ? "Documents for broker-owned assets and workflow responsibilities" : "Full operations queue for trade documents and signatures"}
+        title="Documents"
+        subtitle="Full operations queue for trade documents and signatures"
         action={
           canCreateDocuments ? (
           <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
