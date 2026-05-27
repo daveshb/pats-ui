@@ -296,6 +296,28 @@ const tradeDocuments: TradeDoc[] = [
   { tradeDocumentId: "tdoc_007", inboundTradeId: "it_7bd6a44f", tradeWorkflowStepId: "tws_sponsor_001", workflowRequirementId: "wr_accreditation", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", accountId: "acc_004", name: "Sponsor Acceptance Memo", type: "supporting_document", platform: "other", source: "broker", status: "pending", requiredActorType: "asset_sponsor", requiredActorId: "sponsor_techcorp", visibleToRoles: ["pats_ops", "wealth_manager", "asset_sponsor"], actionRequired: true, actionLabel: "Review memo", assignee: "FinTech Capital", dueDate: "2026-05-26", createdAt: "2026-05-01T10:20:00Z", updatedAt: "2026-05-01T10:20:00Z" },
 ];
 
+function mergeDocumentSeeds(storedDocs: TradeDoc[]) {
+  const storedById = new Map(storedDocs.map((doc) => [doc.tradeDocumentId, doc]));
+  const mergedSeeds = tradeDocuments.map((seed) => {
+    const stored = storedById.get(seed.tradeDocumentId);
+    if (!stored) return seed;
+    return {
+      ...seed,
+      ...stored,
+      requiredActorType: stored.requiredActorType ?? seed.requiredActorType,
+      requiredActorId: stored.requiredActorId ?? seed.requiredActorId,
+      signerPersonId: stored.signerPersonId ?? seed.signerPersonId,
+      visibleToRoles: stored.visibleToRoles ?? seed.visibleToRoles,
+      actionRequired: stored.actionRequired ?? seed.actionRequired,
+      actionLabel: stored.actionLabel ?? seed.actionLabel,
+      assignee: stored.assignee ?? seed.assignee,
+      dueDate: stored.dueDate ?? seed.dueDate,
+    };
+  });
+  const customDocs = storedDocs.filter((doc) => !tradeDocuments.some((seed) => seed.tradeDocumentId === doc.tradeDocumentId));
+  return [...mergedSeeds, ...customDocs];
+}
+
 const workflowSteps = [
   { tradeWorkflowStepId: "tws_doc_001", tradeWorkflowId: "tw_001", inboundTradeId: "it_d672e1c1", name: "Subscription documents" },
   { tradeWorkflowStepId: "tws_sig_001", tradeWorkflowId: "tw_001", inboundTradeId: "it_d672e1c1", name: "Investor signature" },
@@ -3930,7 +3952,7 @@ export default function PatsPlatform() {
 
   const [localTrades, setLocalTrades] = useState<Trade[]>(() => loadLocal("pats_trades", trades));
   const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
-  const [localDocs, setLocalDocs] = useState<TradeDoc[]>(() => loadLocal("pats_docs", tradeDocuments));
+  const [localDocs, setLocalDocs] = useState<TradeDoc[]>(() => mergeDocumentSeeds(loadLocal("pats_docs", tradeDocuments)));
   const [localWorkflows, setLocalWorkflows] = useState<WorkflowRecord[]>(() => loadLocal("pats_workflows", workflows));
 
   const addTrade = (t: Trade) => { const n = [t, ...localTrades]; setLocalTrades(n); saveLocal("pats_trades", n); };
