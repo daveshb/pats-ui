@@ -1042,11 +1042,13 @@ function BlotterLifecycleStrip() {
   );
 }
 
-function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
+function Dashboard({ role, onSelect }: { role: AccessRole; onSelect: (key: NavKey) => void }) {
   const activeBrokerCount = brokers.filter((broker) => broker.status === "Active").length;
   const workflowRequiredCount = trades.filter((trade) => trade.status === "workflow_required").length;
   const readyCount = trades.filter((trade) => trade.status === "validated").length;
   const exceptionCount = trades.filter((trade) => trade.status === "unresolved" || trade.status === "needs_review").length;
+  const tradeReviewTarget: NavKey = roleCanAccessNav(role, "externalTrades") ? "externalTrades" : roleCanAccessNav(role, "trades") ? "trades" : "documents";
+  const canOpenIntegrations = roleCanAccessNav(role, "integrations");
   const queueRows = trades.slice(0, 4).map((trade) => ({
     broker: trade.broker,
     asset: trade.asset,
@@ -1080,13 +1082,15 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
               <h2 className="text-base font-semibold text-white">Trades to review</h2>
               <p className="mt-1 text-xs text-slate-500">Trades from Vantage with the asset match, workflow result, and next action.</p>
             </div>
-            <button onClick={() => onSelect("externalTrades")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">
-              View All <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            {roleCanAccessNav(role, tradeReviewTarget) && (
+              <button onClick={() => onSelect(tradeReviewTarget)} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">
+                View All <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           <div className="space-y-2">
             {queueRows.map((trade) => (
-              <button key={`${trade.broker}-${trade.ticker}-${trade.status}`} onClick={() => onSelect("externalTrades")} className="grid w-full grid-cols-[1.15fr_1fr_0.55fr_0.7fr_0.85fr_0.95fr] items-center rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-left text-xs transition hover:bg-slate-800/40">
+              <button key={`${trade.broker}-${trade.ticker}-${trade.status}`} onClick={() => onSelect(tradeReviewTarget)} className="grid w-full grid-cols-[1.15fr_1fr_0.55fr_0.7fr_0.85fr_0.95fr] items-center rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-left text-xs transition hover:bg-slate-800/40">
                 <span className="text-slate-300">{trade.broker}</span>
                 <span className="text-slate-400">{trade.asset}</span>
                 <span className="font-semibold text-slate-100">{trade.ticker}</span>
@@ -1148,7 +1152,7 @@ function Dashboard({ onSelect }: { onSelect: (key: NavKey) => void }) {
             <h2 className="text-base font-semibold text-white">Integration status</h2>
             <p className="mt-1 text-xs text-slate-500">Vantage, broker, document, and fill delivery health</p>
           </div>
-          <button onClick={() => onSelect("integrations")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">Manage <ChevronRight className="h-3.5 w-3.5" /></button>
+          {canOpenIntegrations && <button onClick={() => onSelect("integrations")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">Manage <ChevronRight className="h-3.5 w-3.5" /></button>}
         </div>
         <div className="grid grid-cols-4 gap-3">
           {["Vantage Blotter API", "Private Broker API", "DocuSign / iCapital", "Fill Return API"].map((item) => (
@@ -2227,6 +2231,12 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
   const ownedAssets = assets.filter((asset) => viewer.brokerIds?.includes(asset.patsBrokerProfileId));
   const actionDocs = docs.filter((doc) => documentCanOperate(doc, viewer) && doc.status !== "completed" && doc.status !== "cancelled");
   const waitingDocs = docs.filter((doc) => !documentCanOperate(doc, viewer) && doc.status !== "completed" && doc.status !== "cancelled");
+  const canCreateDocuments = documentCanCreate(viewer);
+  const isExternalPlatform = viewer.role === "external_platform";
+  const workbenchTitle = isExternalPlatform ? "External platform operations" : broker?.name ?? viewer.label;
+  const workbenchDescription = isExternalPlatform
+    ? "Limited document operations for platform handoffs and callback status."
+    : "Broker workbench for documents this broker owns or must prepare.";
 
   return (
     <div className="space-y-5">
@@ -2234,25 +2244,31 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
         <ShellCard className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-white">{broker?.name ?? viewer.label}</h2>
-              <p className="mt-1 text-xs text-slate-500">Broker workbench for documents this broker owns or must prepare.</p>
+              <h2 className="text-base font-semibold text-white">{workbenchTitle}</h2>
+              <p className="mt-1 text-xs text-slate-500">{workbenchDescription}</p>
             </div>
             <StatusBadge value={broker?.status ?? "active"} />
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <Info label="Owned assets" value={`${ownedAssets.length}`} />
-            <Info label="Broker actions" value={`${actionDocs.length}`} />
+            <Info label={isExternalPlatform ? "Platform assets" : "Owned assets"} value={`${ownedAssets.length}`} />
+            <Info label={isExternalPlatform ? "Platform actions" : "Broker actions"} value={`${actionDocs.length}`} />
             <Info label="Waiting on others" value={`${waitingDocs.length}`} />
             <Info label="Fill return" value={broker?.fillReturn ?? "Not set"} />
           </div>
-          <button onClick={onAddDoc} className="mt-4 flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
-            <Plus className="h-3.5 w-3.5" /> Add broker document
-          </button>
+          {canCreateDocuments ? (
+            <button onClick={onAddDoc} className="mt-4 flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-sky-500 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
+              <Plus className="h-3.5 w-3.5" /> Add broker document
+            </button>
+          ) : (
+            <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2.5 text-[11px] font-semibold text-slate-500">
+              Document creation is hidden for this role
+            </div>
+          )}
         </ShellCard>
 
         <ShellCard className="p-5">
-          <h2 className="text-base font-semibold text-white">Broker-owned assets</h2>
-          <p className="mt-1 text-xs text-slate-500">The broker only sees documents in its relationship scope.</p>
+          <h2 className="text-base font-semibold text-white">{isExternalPlatform ? "Platform handoff scope" : "Broker-owned assets"}</h2>
+          <p className="mt-1 text-xs text-slate-500">{isExternalPlatform ? "The platform only sees document work assigned to its integration." : "The broker only sees documents in its relationship scope."}</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             {ownedAssets.map((asset) => (
               <div key={asset.privateAssetId} className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
@@ -2266,6 +2282,7 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
                 <p className="mt-3 text-[11px] text-slate-500">{asset.documentExecutionPlatform} documents - {asset.taxDocumentSource} tax source</p>
               </div>
             ))}
+            {ownedAssets.length === 0 && <p className="col-span-2 rounded-md border border-slate-800 bg-slate-950/35 p-3 text-xs text-slate-500">No private asset scope is exposed for this role.</p>}
           </div>
         </ShellCard>
       </div>
@@ -2273,8 +2290,8 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
       <div className="grid grid-cols-[1fr_1fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 px-5 py-3">
-            <h2 className="text-sm font-semibold text-white">Broker action queue</h2>
-            <p className="mt-1 text-[11px] text-slate-500">Prepare envelopes, upload broker files, and send packages owned by this broker.</p>
+            <h2 className="text-sm font-semibold text-white">{isExternalPlatform ? "Platform action queue" : "Broker action queue"}</h2>
+            <p className="mt-1 text-[11px] text-slate-500">{isExternalPlatform ? "Operate only the documents assigned to the external platform integration." : "Prepare envelopes, upload broker files, and send packages owned by this broker."}</p>
           </div>
           <div className="divide-y divide-slate-800/70">
             {actionDocs.map((doc) => {
@@ -2300,7 +2317,7 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
                 </div>
               );
             })}
-            {actionDocs.length === 0 && <p className="p-5 text-xs text-slate-500">No broker-owned document actions right now.</p>}
+            {actionDocs.length === 0 && <p className="p-5 text-xs text-slate-500">{isExternalPlatform ? "No platform document actions right now." : "No broker-owned document actions right now."}</p>}
           </div>
         </ShellCard>
 
@@ -3242,6 +3259,95 @@ function accessStatusTone(status: AccessStatus): StatusTone {
   return "red";
 }
 
+function rolePermissionTone(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("hidden")) return "border-slate-800 bg-slate-950/40 text-slate-500";
+  if (normalized.includes("limited")) return "border-amber-400/25 bg-amber-400/10 text-amber-200";
+  if (normalized.includes("read only") || normalized.includes("view")) return "border-sky-400/25 bg-sky-400/10 text-sky-200";
+  return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
+}
+
+function RoleAccessPreview({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role: AccessRole) => void }) {
+  const permissions = rolePermissions[role];
+  const visibleViews = navItemsForRole(role);
+  const rows = [
+    ["Dashboard / Overview", permissions.dashboard],
+    ["Documents", permissions.documents],
+    ["Document Creation", permissions.documentCreation],
+    ["Document Operations", permissions.documentOperations],
+    ["Signature Tasks", permissions.signatureTasks],
+    ["Sponsor Review", permissions.sponsorReview],
+    ["Trades / Workflows", permissions.tradesWorkflows],
+    ["Accounts", permissions.accounts],
+    ["Households", permissions.households],
+    ["Contacts", permissions.contacts],
+    ["Private Assets", permissions.privateAssets],
+    ["Role Administration", permissions.roleAdministration],
+  ];
+
+  return (
+    <ShellCard className="mb-5 overflow-hidden">
+      <div className="grid grid-cols-[0.95fr_1.65fr] gap-0">
+        <div className="border-r border-slate-800/80 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Role access model</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{permissions.summary}</p>
+            </div>
+            <StatusBadge value={accessRoleLabels[role]} tone="blue" />
+          </div>
+
+          <select
+            value={role}
+            onChange={(event) => onRoleChange(event.target.value as AccessRole)}
+            className="mt-5 h-9 w-full rounded-md border border-slate-700 bg-[#0b0d11] px-3 text-xs font-semibold text-slate-100 outline-none focus:border-sky-400/70"
+          >
+            {Object.entries(accessRoleLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <Info label="Visible views" value={`${visibleViews.length}`} />
+            <Info label="Document create" value={permissions.canCreateDocuments ? "Yes" : "No"} />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {visibleViews.map((item) => {
+              const Icon = item.icon;
+              return (
+                <span key={item.key} className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-800 bg-slate-950/45 px-2 text-[10px] font-semibold text-slate-300">
+                  <Icon className="h-3 w-3 text-sky-300" />
+                  {item.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="grid grid-cols-[1fr_1.15fr] border-b border-slate-800/80 bg-slate-950/45 px-5 py-2 text-[8px] font-semibold text-slate-600">
+            <span>View / capability</span>
+            <span>Access for selected role</span>
+          </div>
+          <div className="grid grid-cols-2">
+            {rows.map(([label, value]) => (
+              <div key={label} className="contents">
+                <div className="border-b border-slate-800/70 px-5 py-3 text-xs font-semibold text-slate-200">{label}</div>
+                <div className="border-b border-slate-800/70 px-5 py-3">
+                  <span className={`inline-flex min-h-6 items-center rounded-md border px-2 text-[10px] font-semibold ${rolePermissionTone(value)}`}>
+                    {value}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </ShellCard>
+  );
+}
+
 function UserAccessPage({
   users,
   onUpdateUser,
@@ -3249,6 +3355,7 @@ function UserAccessPage({
   users: UserAccessRequest[];
   onUpdateUser: (userId: string, patch: Partial<UserAccessRequest>) => void;
 }) {
+  const [previewRole, setPreviewRole] = useState<AccessRole>("pats_ops");
   const pending = users.filter((user) => user.status === "pending").length;
   const active = users.filter((user) => user.status === "active").length;
   const inactive = users.filter((user) => user.status === "inactive").length;
@@ -3298,6 +3405,8 @@ function UserAccessPage({
         <MetricCard label="Inactive" value={`${inactive}`} delta="paused" />
         <MetricCard label="Removed" value={`${removed}`} delta="no role" />
       </div>
+
+      <RoleAccessPreview role={previewRole} onRoleChange={setPreviewRole} />
 
       <ShellCard className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
@@ -4303,6 +4412,7 @@ function AddAccountPanel({ household, persons, onClose }: { household: Household
 
 export default function PatsPlatform() {
   const [active, setActive] = useState<NavKey>("dashboard");
+  const [activeRole, setActiveRole] = useState<AccessRole>("pats_ops");
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [selectedExternal, setSelectedExternal] = useState<string | null>(null);
   const [newTradeOpen, setNewTradeOpen] = useState(false);
@@ -4322,21 +4432,28 @@ export default function PatsPlatform() {
   const addWorkflow = (w: WorkflowRecord) => { const n = [...localWorkflows, w]; setLocalWorkflows(n); saveLocal("pats_workflows", n); };
   const updateWorkflow = (id: string, p: Partial<WorkflowRecord>) => { const n = localWorkflows.map(w => w.id === id ? { ...w, ...p } : w); setLocalWorkflows(n); saveLocal("pats_workflows", n); };
   const updateUserAccess = (id: string, p: Partial<UserAccessRequest>) => { const n = localUserAccess.map(u => u.userId === id ? { ...u, ...p } : u); setLocalUserAccess(n); saveLocal("pats_user_access", n); };
+  const selectNav = (key: NavKey) => {
+    if (roleCanAccessNav(activeRole, key)) setActive(key);
+  };
+  const changeRole = (role: AccessRole) => {
+    setActiveRole(role);
+    if (!roleCanAccessNav(role, active)) setActive("dashboard");
+  };
 
   return (
     <div className="min-h-screen bg-[#080a0d] font-sans text-slate-100 [font-feature-settings:'tnum']">
-      <Sidebar active={active} onSelect={setActive} />
-      <TopBar />
+      <Sidebar active={active} role={activeRole} onSelect={selectNav} />
+      <TopBar role={activeRole} onRoleChange={changeRole} />
       <MarketContextBar />
       <main className="ml-60 min-h-[calc(100vh-94px)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.055),transparent_32%),linear-gradient(180deg,#0b0d11_0%,#080a0d_100%)] px-5 py-5">
         <div className="mx-auto max-w-[1560px]">
-          {active === "dashboard" && <Dashboard onSelect={setActive} />}
+          {active === "dashboard" && <Dashboard role={activeRole} onSelect={selectNav} />}
           {active === "trades" && <Trades trades={localTrades} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
           {active === "externalTrades" && <ExternalTrades openItem={setSelectedExternal} />}
           {active === "brokers" && <Brokers brokers={localBrokers} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets />}
           {active === "workflows" && <Workflows workflows={localWorkflows} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
-          {active === "documents" && <Documents docs={localDocs} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
+          {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onRoleChange={changeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
           {active === "households" && <Households />}
           {active === "execution" && <Execution />}
           {active === "integrations" && <Integrations />}
