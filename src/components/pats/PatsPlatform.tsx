@@ -942,11 +942,13 @@ function RoleSelect({
   value,
   onChange,
   compact = false,
+  leadingIcon,
   className = "",
 }: {
   value: AccessRole;
   onChange: (role: AccessRole) => void;
   compact?: boolean;
+  leadingIcon?: React.ReactNode;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -959,7 +961,7 @@ function RoleSelect({
           type="button"
           aria-label="Close role menu"
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-40 cursor-default bg-black/35 backdrop-blur-[1px]"
+          className="fixed bottom-0 right-0 top-0 left-60 z-40 cursor-default bg-black/35 backdrop-blur-[1px]"
         />
       )}
       <button
@@ -969,7 +971,10 @@ function RoleSelect({
           compact ? "h-8 px-2.5 text-xs" : "h-9 px-3 text-xs"
         }`}
       >
-        <span className="truncate">{selectedLabel}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {leadingIcon}
+          <span className="truncate">{selectedLabel}</span>
+        </span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition ${open ? "rotate-180 text-sky-300" : ""}`} />
       </button>
       {open && (
@@ -1062,10 +1067,13 @@ function TopBar({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role:
       </div>
       <div className="flex items-center gap-4">
         <span className="rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[9px] font-semibold text-emerald-300">Production</span>
-        <div className="flex w-48 items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-2 py-1.5">
-          <Shield className="h-3.5 w-3.5 text-sky-300" />
-          <RoleSelect value={role} onChange={onRoleChange} compact className="min-w-0 flex-1" />
-        </div>
+        <RoleSelect
+          value={role}
+          onChange={onRoleChange}
+          compact
+          leadingIcon={<Shield className="h-3.5 w-3.5 shrink-0 text-sky-300" />}
+          className="w-48"
+        />
         <div className="relative">
           <Bell className="h-4 w-4 text-slate-400" />
           <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-sky-400" />
@@ -3395,6 +3403,7 @@ function accessStatusTone(status: AccessStatus): StatusTone {
 
 function rolePermissionTone(value: string) {
   const normalized = value.toLowerCase();
+  if (normalized.includes("view only")) return "border-sky-400/25 bg-sky-400/10 text-sky-200";
   if (normalized.includes("hidden")) return "border-slate-800 bg-slate-950/40 text-slate-500";
   if (normalized.includes("limited")) return "border-amber-400/25 bg-amber-400/10 text-amber-200";
   if (normalized.includes("read only") || normalized.includes("view")) return "border-sky-400/25 bg-sky-400/10 text-sky-200";
@@ -3404,26 +3413,69 @@ function rolePermissionTone(value: string) {
 function RoleAccessPreview({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role: AccessRole) => void }) {
   const permissions = rolePermissions[role];
   const visibleViews = navItemsForRole(role);
-  const rows = [
-    ["Dashboard / Overview", permissions.dashboard],
-    ["Documents", permissions.documents],
-    ["Document Creation", permissions.documentCreation],
-    ["Document Operations", permissions.documentOperations],
-    ["Signature Tasks", permissions.signatureTasks],
-    ["Sponsor Review", permissions.sponsorReview],
-    ["Trades / Workflows", permissions.tradesWorkflows],
-    ["Accounts", permissions.accounts],
-    ["Households", permissions.households],
-    ["Contacts", permissions.contacts],
-    ["Private Assets", permissions.privateAssets],
-    ["Role Administration", permissions.roleAdministration],
-    ["Manual Trade Creation", permissions.canCreateTrades ? "Allowed" : "Hidden"],
-    ["Broker Configuration", permissions.canManageBrokers ? "Allowed" : "View only / hidden actions"],
-    ["Workflow Configuration", permissions.canManageWorkflows ? "Allowed" : "View only / hidden actions"],
-    ["Execution Actions", permissions.canOperateExecution ? "Allowed" : roleCanAccessNav(role, "execution") ? "View only" : "Hidden"],
-    ["Contact / Account Edits", permissions.canManageHouseholds ? "Allowed" : roleCanAccessNav(role, "households") ? "View only" : "Hidden"],
-    ["Integration Settings", permissions.canManageIntegrations ? "Allowed" : roleCanAccessNav(role, "integrations") ? "View only" : "Hidden"],
-    ["Role Assignment Actions", permissions.canAdministerRoles ? "Allowed" : "Hidden"],
+  const permissionGroups = [
+    {
+      title: "Core workspace",
+      caption: "Landing views and general visibility",
+      icon: LayoutDashboard,
+      items: [
+        ["Dashboard", permissions.dashboard],
+        ["Visible views", `${visibleViews.length} screens`],
+      ],
+    },
+    {
+      title: "Documents",
+      caption: "Creation, operation, signing, and sponsor review",
+      icon: FileText,
+      items: [
+        ["Document view", permissions.documents],
+        ["Create", permissions.documentCreation],
+        ["Operate", permissions.documentOperations],
+        ["Sign", permissions.signatureTasks],
+        ["Sponsor review", permissions.sponsorReview],
+      ],
+    },
+    {
+      title: "Trading",
+      caption: "Trade visibility, workflows, and manual intake",
+      icon: ArrowLeftRight,
+      items: [
+        ["Trades / Workflows", permissions.tradesWorkflows],
+        ["Manual trades", permissions.canCreateTrades ? "Allowed" : "Hidden"],
+        ["Workflow setup", permissions.canManageWorkflows ? "Allowed" : "View only / hidden actions"],
+      ],
+    },
+    {
+      title: "Client data",
+      caption: "Accounts, households, contacts, and assets",
+      icon: Users,
+      items: [
+        ["Accounts", permissions.accounts],
+        ["Households", permissions.households],
+        ["Contacts", permissions.contacts],
+        ["Private assets", permissions.privateAssets],
+        ["Edit contacts", permissions.canManageHouseholds ? "Allowed" : roleCanAccessNav(role, "households") ? "View only" : "Hidden"],
+      ],
+    },
+    {
+      title: "Operations",
+      caption: "Broker setup, execution, and integrations",
+      icon: Route,
+      items: [
+        ["Broker config", permissions.canManageBrokers ? "Allowed" : "View only / hidden actions"],
+        ["Execution actions", permissions.canOperateExecution ? "Allowed" : roleCanAccessNav(role, "execution") ? "View only" : "Hidden"],
+        ["Integration settings", permissions.canManageIntegrations ? "Allowed" : roleCanAccessNav(role, "integrations") ? "View only" : "Hidden"],
+      ],
+    },
+    {
+      title: "Administration",
+      caption: "User role and scope assignment",
+      icon: Shield,
+      items: [
+        ["Role admin view", permissions.roleAdministration],
+        ["Assign roles", permissions.canAdministerRoles ? "Allowed" : "Hidden"],
+      ],
+    },
   ];
 
   return (
@@ -3460,22 +3512,43 @@ function RoleAccessPreview({ role, onRoleChange }: { role: AccessRole; onRoleCha
           </div>
         </div>
 
-        <div>
-          <div className="grid grid-cols-[1fr_1.15fr] border-b border-slate-800/80 bg-slate-950/45 px-5 py-2 text-[8px] font-semibold text-slate-600">
-            <span>View / capability</span>
-            <span>Access for selected role</span>
+        <div className="bg-slate-950/20 p-5">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Permission profile</h3>
+              <p className="mt-1 text-[11px] text-slate-500">Grouped by the surfaces the frontend needs to render or hide.</p>
+            </div>
+            <span className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1 text-[10px] font-semibold text-slate-400">Role based UI</span>
           </div>
-          <div className="grid grid-cols-2">
-            {rows.map(([label, value]) => (
-              <div key={label} className="contents">
-                <div className="border-b border-slate-800/70 px-5 py-3 text-xs font-semibold text-slate-200">{label}</div>
-                <div className="border-b border-slate-800/70 px-5 py-3">
-                  <span className={`inline-flex min-h-6 items-center rounded-md border px-2 text-[10px] font-semibold ${rolePermissionTone(value)}`}>
-                    {value}
-                  </span>
+
+          <div className="grid grid-cols-2 gap-3">
+            {permissionGroups.map((group) => {
+              const Icon = group.icon;
+              return (
+                <div key={group.title} className="rounded-lg border border-slate-800 bg-[#0c1016] p-4 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset]">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-sky-400/20 bg-sky-400/10">
+                      <Icon className="h-4 w-4 text-sky-300" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-semibold text-slate-100">{group.title}</h4>
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-500">{group.caption}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {group.items.map(([label, value]) => (
+                      <div key={`${group.title}-${label}`} className="flex items-center justify-between gap-3 rounded-md border border-slate-800/70 bg-slate-950/35 px-2.5 py-2">
+                        <span className="text-[10px] font-semibold text-slate-500">{label}</span>
+                        <span className={`inline-flex min-h-5 max-w-[160px] items-center truncate rounded-md border px-2 text-[9px] font-semibold ${rolePermissionTone(value)}`}>
+                          {value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
