@@ -3065,10 +3065,6 @@ function AlertsPage() {
   );
 }
 
-function roleLabel(role?: AccessRole) {
-  return role ? accessRoleLabels[role] : "No role";
-}
-
 function accessStatusTone(status: AccessStatus): StatusTone {
   if (status === "active") return "green";
   if (status === "pending") return "yellow";
@@ -3150,7 +3146,7 @@ function UserAccessPage({
           const canRemove = user.status !== "role_removed";
 
           return (
-            <div key={user.userId} className="grid grid-cols-[1.35fr_0.55fr_0.9fr_1fr_0.7fr_1.2fr] items-center gap-3 border-t border-slate-800/80 px-5 py-4">
+            <div key={user.userId} className="grid grid-cols-[1.6fr_0.55fr_1fr_1.3fr_1.15fr_1.05fr] items-center gap-5 border-t border-slate-800/80 px-6 py-5">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900">
@@ -3170,13 +3166,12 @@ function UserAccessPage({
                 <select
                   value={role}
                   onChange={(event) => setDraftRole(user, event.target.value as AccessRole)}
-                  className="h-8 w-full rounded-md border border-slate-700 bg-[#0b0d11] px-2 text-xs font-semibold text-slate-100 outline-none focus:border-sky-400/70"
+                  className="h-8 w-full rounded-md border border-slate-700 bg-[#0b0d11] px-2.5 text-xs font-semibold text-slate-100 outline-none focus:border-sky-400/70"
                 >
                   {Object.entries(accessRoleLabels).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
-                <p className="mt-1 text-[10px] text-slate-500">{roleLabel(user.assignedRole ?? user.requestedRole)}</p>
               </div>
 
               <div className="min-w-0">
