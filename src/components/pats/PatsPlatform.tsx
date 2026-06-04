@@ -2174,28 +2174,24 @@ function documentPrimaryAction(doc: TradeDoc) {
   return "Open document";
 }
 
-function DocumentRoleTabs({ viewer, onChangeRole, actionCount }: { viewer: DocumentViewer; onChangeRole: (role: AccessRole) => void; actionCount: number }) {
+function DocumentRoleContext({ viewer, actionCount }: { viewer: DocumentViewer; actionCount: number }) {
   return (
-    <div className="mb-5 border-b border-slate-800">
-      <div className="flex flex-wrap items-end gap-1">
-        {documentViewers.map((candidate) => {
-          const active = candidate.contactId === viewer.contactId;
-          return (
-            <button
-              key={candidate.contactId}
-              onClick={() => onChangeRole(candidate.role)}
-              className={`relative flex h-11 items-center gap-2 px-3 text-xs font-semibold transition ${active ? "text-white" : "text-slate-500 hover:text-slate-200"}`}
-            >
-              <span>{candidate.label}</span>
-              {active && actionCount > 0 && <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] text-amber-200">{actionCount}</span>}
-              {active && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-sky-400" />}
-            </button>
-          );
-        })}
+    <div className="mb-5 rounded-lg border border-slate-800 bg-slate-950/35 px-4 py-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-sky-400/20 bg-sky-400/10">
+            <Shield className="h-3.5 w-3.5 text-sky-300" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-100">{accessRoleLabels[viewer.role]}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{accessRoleScopeHints[viewer.role]}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge value={`${actionCount} action${actionCount === 1 ? "" : "s"}`} tone={actionCount > 0 ? "yellow" : "green"} />
+          <span className="text-[10px] font-semibold text-slate-500">Controlled by navbar role</span>
+        </div>
       </div>
-      <p className="mt-2 pb-3 text-[11px] text-slate-500">
-        Contacts decides the point of view. Each role sees a different document experience, not just a filtered table.
-      </p>
     </div>
   );
 }
@@ -2483,13 +2479,11 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
 function Documents({
   docs,
   activeRole,
-  onRoleChange,
   onAddDoc,
   onUpdateDoc,
 }: {
   docs: TradeDoc[];
   activeRole: AccessRole;
-  onRoleChange: (role: AccessRole) => void;
   onAddDoc: (d: TradeDoc) => void;
   onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void;
 }) {
@@ -2513,7 +2507,7 @@ function Documents({
       <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
         action={canCreateDocuments ? <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />Add Document</button> : undefined}
       />
-      <DocumentRoleTabs viewer={viewer} onChangeRole={(role) => { onRoleChange(role); setSelectedDocumentId(""); }} actionCount={0} />
+      <DocumentRoleContext viewer={viewer} actionCount={0} />
       <p className="mt-8 text-center text-xs text-slate-500">No documents are visible for this role.</p>
       {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
     </>
@@ -2530,13 +2524,13 @@ function Documents({
     selectedDocument.status === "signed" ? 3 :
     (selectedDocument.status === "sent" || selectedDocument.status === "uploaded") ? 2 : 1;
 
-  const roleTabs = <DocumentRoleTabs viewer={viewer} onChangeRole={(role) => { onRoleChange(role); setSelectedDocumentId(""); }} actionCount={actionRequiredCount} />;
+  const roleContext = <DocumentRoleContext viewer={viewer} actionCount={actionRequiredCount} />;
 
   if (viewer.role === "client_signer") {
     return (
       <>
         <PageTitle title="Documents" subtitle="Documents assigned to you for signature or upload" />
-        {roleTabs}
+        {roleContext}
         <ClientSignerDocumentsView docs={visibleDocs} viewer={viewer} />
       </>
     );
@@ -2546,7 +2540,7 @@ function Documents({
     return (
       <>
         <PageTitle title="Documents" subtitle="Client document status across your households and accounts" />
-        {roleTabs}
+        {roleContext}
         <WealthManagerDocumentsView docs={visibleDocs} />
       </>
     );
@@ -2556,7 +2550,7 @@ function Documents({
     return (
       <>
         <PageTitle title="Documents" subtitle="Sponsor and platform review for private asset documents" />
-        {roleTabs}
+        {roleContext}
         <SponsorDocumentsView docs={visibleDocs} viewer={viewer} />
       </>
     );
@@ -2566,7 +2560,7 @@ function Documents({
     return (
       <>
         <PageTitle title="Documents" subtitle="Limited platform document operations and callback status" />
-        {roleTabs}
+        {roleContext}
         <BrokerDocumentsView docs={visibleDocs} viewer={viewer} onUpdateDoc={onUpdateDoc} onAddDoc={() => setAddDocOpen(true)} />
       </>
     );
@@ -2580,7 +2574,7 @@ function Documents({
           subtitle="Broker-owned document workbench for private asset workflows"
         />
         <Toolbar placeholder="Search broker documents, asset, signer, platform, or status..." />
-        {roleTabs}
+        {roleContext}
         <BrokerDocumentsView docs={visibleDocs} viewer={viewer} onUpdateDoc={onUpdateDoc} onAddDoc={() => setAddDocOpen(true)} />
         {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
       </>
@@ -2601,7 +2595,7 @@ function Documents({
         }
       />
       <Toolbar placeholder="Search by document name, inbound trade ID, platform, type, or status..." />
-      {roleTabs}
+      {roleContext}
       <div className="grid grid-cols-[1.25fr_0.95fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
@@ -4661,7 +4655,7 @@ export default function PatsPlatform() {
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets />}
           {active === "workflows" && <Workflows workflows={localWorkflows} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
-          {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onRoleChange={changeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
+          {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
           {active === "households" && <Households role={activeRole} />}
           {active === "execution" && <Execution role={activeRole} />}
           {active === "integrations" && <Integrations role={activeRole} />}
