@@ -58,6 +58,8 @@ type NavKey =
   | "settings";
 
 type StatusTone = "green" | "yellow" | "red" | "blue" | "gray" | "purple";
+type AccessRole = "pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor" | "external_platform";
+type DocumentViewerRole = AccessRole;
 
 interface Trade {
   id: string;
@@ -177,11 +179,11 @@ interface TradeDoc {
   platform: "manual_upload" | "docusign" | "icapital" | "umb" | "other";
   source: "ops" | "broker" | "external_platform" | "system";
   status: "pending" | "uploaded" | "sent" | "signed" | "completed" | "blocked" | "cancelled";
-  requiredActorType?: "pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor" | "external_platform";
+  requiredActorType?: AccessRole;
   requiredActorId?: string;
   signerPersonId?: string;
   ownerContactId?: string;
-  visibleToRoles?: ("pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor")[];
+  visibleToRoles?: AccessRole[];
   actionRequired?: boolean;
   actionLabel?: string;
   assignee?: string;
@@ -197,8 +199,6 @@ interface TradeDoc {
   updatedAt: string;
 }
 
-type DocumentViewerRole = "pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor";
-type AccessRole = DocumentViewerRole | "external_platform";
 type AccessStatus = "pending" | "active" | "inactive" | "role_removed";
 
 interface DocumentViewer {
@@ -358,6 +358,7 @@ const documentViewers: DocumentViewer[] = [
   { contactId: "wm_chen", label: "Wealth manager", role: "wealth_manager", householdIds: ["hh_001", "hh_002"], accountIds: ["acc_001", "acc_002", "acc_003", "acc_004"] },
   { contactId: "per_001", label: "Client signer", role: "client_signer", householdIds: ["hh_001"], accountIds: ["acc_001", "acc_002"], personIds: ["per_001"] },
   { contactId: "sponsor_techcorp", label: "Asset sponsor", role: "asset_sponsor", assetIds: ["pa_tech_a", "pa_fintech_d"] },
+  { contactId: "icapital_platform", label: "External platform", role: "external_platform" },
 ];
 
 const accessRoleLabels: Record<AccessRole, string> = {
@@ -376,6 +377,129 @@ const accessRoleScopeHints: Record<AccessRole, string> = {
   client_signer: "Person and signature scope",
   asset_sponsor: "Private asset scope",
   external_platform: "Platform contact scope",
+};
+
+interface RolePermissionDefinition {
+  summary: string;
+  nav: NavKey[];
+  dashboard: string;
+  documents: string;
+  documentCreation: string;
+  documentOperations: string;
+  signatureTasks: string;
+  sponsorReview: string;
+  tradesWorkflows: string;
+  accounts: string;
+  households: string;
+  contacts: string;
+  privateAssets: string;
+  roleAdministration: string;
+  canCreateDocuments: boolean;
+}
+
+const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
+  pats_ops: {
+    summary: "Internal operations role with global visibility and administration controls.",
+    nav: ["dashboard", "trades", "externalTrades", "brokers", "assets", "workflows", "documents", "households", "execution", "integrations", "userAccess", "activity", "alerts", "settings"],
+    dashboard: "Full operations overview",
+    documents: "All documents",
+    documentCreation: "Allowed",
+    documentOperations: "Allowed",
+    signatureTasks: "Hidden",
+    sponsorReview: "Allowed",
+    tradesWorkflows: "Full operation",
+    accounts: "All accounts",
+    households: "All households",
+    contacts: "All contacts",
+    privateAssets: "All private assets",
+    roleAdministration: "Allowed",
+    canCreateDocuments: true,
+  },
+  broker: {
+    summary: "Broker team role for scoped private asset operations and document preparation.",
+    nav: ["dashboard", "trades", "externalTrades", "brokers", "assets", "workflows", "documents", "households", "execution", "activity", "alerts"],
+    dashboard: "Broker scoped overview",
+    documents: "Scoped documents",
+    documentCreation: "Allowed",
+    documentOperations: "Allowed in broker scope",
+    signatureTasks: "Hidden",
+    sponsorReview: "Hidden",
+    tradesWorkflows: "Operate scoped trades",
+    accounts: "Broker scoped accounts",
+    households: "Scoped households",
+    contacts: "Related contacts",
+    privateAssets: "Broker scoped assets",
+    roleAdministration: "Hidden",
+    canCreateDocuments: true,
+  },
+  wealth_manager: {
+    summary: "Advisor visibility role for client status, documents, and assigned households.",
+    nav: ["dashboard", "trades", "assets", "workflows", "documents", "households", "activity"],
+    dashboard: "Advisor scoped overview",
+    documents: "View documents",
+    documentCreation: "Hidden",
+    documentOperations: "Hidden",
+    signatureTasks: "Hidden",
+    sponsorReview: "Hidden",
+    tradesWorkflows: "Read only",
+    accounts: "Assigned household/account scope",
+    households: "Assigned households",
+    contacts: "Related contacts",
+    privateAssets: "Read only when applicable",
+    roleAdministration: "Hidden",
+    canCreateDocuments: false,
+  },
+  client_signer: {
+    summary: "Client signing role focused on personal documents and associated profile data.",
+    nav: ["dashboard", "documents", "households", "activity"],
+    dashboard: "Simple personal overview",
+    documents: "Own documents",
+    documentCreation: "Hidden",
+    documentOperations: "Hidden",
+    signatureTasks: "Allowed",
+    sponsorReview: "Hidden",
+    tradesWorkflows: "Limited read only",
+    accounts: "Associated accounts/persons",
+    households: "Limited read only",
+    contacts: "Own profile",
+    privateAssets: "Read only when applicable",
+    roleAdministration: "Hidden",
+    canCreateDocuments: false,
+  },
+  asset_sponsor: {
+    summary: "Sponsor role for assigned private assets and sponsor document review.",
+    nav: ["dashboard", "assets", "documents", "workflows", "activity"],
+    dashboard: "Sponsor scoped overview",
+    documents: "Asset related documents",
+    documentCreation: "Hidden",
+    documentOperations: "Hidden",
+    signatureTasks: "Hidden",
+    sponsorReview: "Allowed",
+    tradesWorkflows: "Own assets read only",
+    accounts: "Hidden",
+    households: "Hidden",
+    contacts: "Hidden",
+    privateAssets: "Own assets",
+    roleAdministration: "Hidden",
+    canCreateDocuments: false,
+  },
+  external_platform: {
+    summary: "Integration user for limited document operations and technical handoffs.",
+    nav: ["dashboard", "externalTrades", "documents", "execution", "integrations", "activity"],
+    dashboard: "Technical integration overview",
+    documents: "Platform documents",
+    documentCreation: "Hidden",
+    documentOperations: "Limited",
+    signatureTasks: "Hidden",
+    sponsorReview: "Hidden",
+    tradesWorkflows: "Limited operation",
+    accounts: "Hidden",
+    households: "Hidden",
+    contacts: "Hidden",
+    privateAssets: "Hidden",
+    roleAdministration: "Hidden",
+    canCreateDocuments: false,
+  },
 };
 
 const userAccessSeeds: UserAccessRequest[] = [
@@ -607,6 +731,7 @@ function actorLabel(doc: TradeDoc) {
 
 function documentVisibleToViewer(doc: TradeDoc, viewer: DocumentViewer) {
   if (viewer.role === "pats_ops") return true;
+  if (viewer.role === "external_platform") return doc.source === "external_platform" || doc.requiredActorType === "external_platform";
   if (doc.visibleToRoles && !doc.visibleToRoles.includes(viewer.role)) return false;
   if (viewer.brokerIds?.includes(doc.patsBrokerProfileId ?? "")) return true;
   if (viewer.accountIds?.includes(doc.accountId ?? "")) return true;
@@ -616,13 +741,14 @@ function documentVisibleToViewer(doc: TradeDoc, viewer: DocumentViewer) {
 }
 
 function documentCanCreate(viewer: DocumentViewer) {
-  return viewer.role === "pats_ops" || viewer.role === "broker" || viewer.role === "asset_sponsor";
+  return rolePermissions[viewer.role].canCreateDocuments;
 }
 
 function documentCanOperate(doc: TradeDoc, viewer: DocumentViewer) {
   if (viewer.role === "pats_ops") return true;
   if (viewer.role === "broker" && viewer.brokerIds?.includes(doc.patsBrokerProfileId ?? "")) return true;
   if (viewer.role === "asset_sponsor" && viewer.assetIds?.includes(doc.privateAssetId ?? "")) return doc.requiredActorType === "asset_sponsor";
+  if (viewer.role === "external_platform") return doc.source === "external_platform" || doc.requiredActorType === "external_platform";
   return false;
 }
 
@@ -747,7 +873,17 @@ const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ 
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
-function Sidebar({ active, onSelect }: { active: NavKey; onSelect: (key: NavKey) => void }) {
+function roleCanAccessNav(role: AccessRole, key: NavKey) {
+  return rolePermissions[role].nav.includes(key);
+}
+
+function navItemsForRole(role: AccessRole) {
+  return navItems.filter((item) => roleCanAccessNav(role, item.key));
+}
+
+function Sidebar({ active, role, onSelect }: { active: NavKey; role: AccessRole; onSelect: (key: NavKey) => void }) {
+  const visibleNavItems = navItemsForRole(role);
+
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-slate-800 bg-[#0b0d11]">
       <div className="flex h-16 items-center gap-3 border-b border-slate-800 px-4">
@@ -760,7 +896,7 @@ function Sidebar({ active, onSelect }: { active: NavKey; onSelect: (key: NavKey)
         </div>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const selected = active === item.key;
           return (
@@ -781,17 +917,18 @@ function Sidebar({ active, onSelect }: { active: NavKey; onSelect: (key: NavKey)
       <div className="border-t border-slate-800 p-3">
         <div className="rounded-md border border-slate-800 bg-slate-950/70 p-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-[8px] text-slate-500">Session</span>
+            <span className="text-[8px] text-slate-500">Role scope</span>
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
           </div>
-          <p className="mt-2 text-xs text-slate-300">Ops desk active</p>
+          <p className="mt-2 text-xs font-semibold text-slate-300">{accessRoleLabels[role]}</p>
+          <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-500">{rolePermissions[role].summary}</p>
         </div>
       </div>
     </aside>
   );
 }
 
-function TopBar() {
+function TopBar({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role: AccessRole) => void }) {
   return (
     <header className="sticky top-0 z-20 ml-60 flex h-14 items-center justify-between border-b border-slate-800 bg-[#0b0d11]/95 px-5 backdrop-blur">
       <div className="relative w-full max-w-xl">
@@ -803,6 +940,18 @@ function TopBar() {
       </div>
       <div className="flex items-center gap-4">
         <span className="rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[9px] font-semibold text-emerald-300">Production</span>
+        <div className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-2.5 py-1.5">
+          <Shield className="h-3.5 w-3.5 text-sky-300" />
+          <select
+            value={role}
+            onChange={(event) => onRoleChange(event.target.value as AccessRole)}
+            className="h-6 bg-transparent text-xs font-semibold text-slate-100 outline-none"
+          >
+            {Object.entries(accessRoleLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
         <div className="relative">
           <Bell className="h-4 w-4 text-slate-400" />
           <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-sky-400" />
@@ -812,8 +961,8 @@ function TopBar() {
             <User className="h-3.5 w-3.5 text-slate-200" />
           </div>
           <div>
-            <div className="text-xs font-semibold text-slate-100">Sarah Chen</div>
-            <div className="text-[8px] text-slate-500">Trader</div>
+            <div className="text-xs font-semibold text-slate-100">{accessRoleLabels[role]}</div>
+            <div className="text-[8px] text-slate-500">{accessRoleScopeHints[role]}</div>
           </div>
           <ChevronDown className="h-4 w-4 text-slate-500" />
         </div>
@@ -1888,7 +2037,7 @@ function documentPrimaryAction(doc: TradeDoc) {
   return "Open document";
 }
 
-function DocumentRoleTabs({ viewer, onChange, actionCount }: { viewer: DocumentViewer; onChange: (id: string) => void; actionCount: number }) {
+function DocumentRoleTabs({ viewer, onChangeRole, actionCount }: { viewer: DocumentViewer; onChangeRole: (role: AccessRole) => void; actionCount: number }) {
   return (
     <div className="mb-5 border-b border-slate-800">
       <div className="flex flex-wrap items-end gap-1">
@@ -1897,7 +2046,7 @@ function DocumentRoleTabs({ viewer, onChange, actionCount }: { viewer: DocumentV
           return (
             <button
               key={candidate.contactId}
-              onClick={() => onChange(candidate.contactId)}
+              onClick={() => onChangeRole(candidate.role)}
               className={`relative flex h-11 items-center gap-2 px-3 text-xs font-semibold transition ${active ? "text-white" : "text-slate-500 hover:text-slate-200"}`}
             >
               <span>{candidate.label}</span>
@@ -2181,13 +2330,24 @@ function BrokerDocumentsView({ docs, viewer, onUpdateDoc, onAddDoc }: { docs: Tr
   );
 }
 
-function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc: (d: TradeDoc) => void; onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void }) {
+function Documents({
+  docs,
+  activeRole,
+  onRoleChange,
+  onAddDoc,
+  onUpdateDoc,
+}: {
+  docs: TradeDoc[];
+  activeRole: AccessRole;
+  onRoleChange: (role: AccessRole) => void;
+  onAddDoc: (d: TradeDoc) => void;
+  onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void;
+}) {
   const [selectedDocumentId, setSelectedDocumentId] = useState(docs[0]?.tradeDocumentId ?? "");
   const [addDocOpen, setAddDocOpen] = useState(false);
   const [blockInput, setBlockInput] = useState("");
   const [showBlockInput, setShowBlockInput] = useState(false);
-  const [viewerId, setViewerId] = useState(documentViewers[0].contactId);
-  const viewer = documentViewers.find((v) => v.contactId === viewerId) ?? documentViewers[0];
+  const viewer = documentViewers.find((v) => v.role === activeRole) ?? documentViewers[0];
   const visibleDocs = docs.filter((doc) => documentVisibleToViewer(doc, viewer));
   const actionRequiredCount = visibleDocs.filter((doc) => doc.actionRequired && doc.status !== "completed" && doc.status !== "cancelled").length;
   const selectedDocument = visibleDocs.find((doc) => doc.tradeDocumentId === selectedDocumentId) ?? visibleDocs[0];
@@ -2203,7 +2363,7 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
       <PageTitle title="Documents" subtitle="Trade documents and signatures required by workflow steps before a trade can continue"
         action={canCreateDocuments ? <button onClick={() => setAddDocOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />Add Document</button> : undefined}
       />
-      <DocumentRoleTabs viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={0} />
+      <DocumentRoleTabs viewer={viewer} onChangeRole={(role) => { onRoleChange(role); setSelectedDocumentId(""); }} actionCount={0} />
       <p className="mt-8 text-center text-xs text-slate-500">No documents are visible for this role.</p>
       {addDocOpen && canCreateDocuments && <AddDocumentPanel viewer={viewer} onAdd={onAddDoc} onClose={() => setAddDocOpen(false)} />}
     </>
@@ -2220,7 +2380,7 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
     selectedDocument.status === "signed" ? 3 :
     (selectedDocument.status === "sent" || selectedDocument.status === "uploaded") ? 2 : 1;
 
-  const roleTabs = <DocumentRoleTabs viewer={viewer} onChange={(id) => { setViewerId(id); setSelectedDocumentId(""); }} actionCount={actionRequiredCount} />;
+  const roleTabs = <DocumentRoleTabs viewer={viewer} onChangeRole={(role) => { onRoleChange(role); setSelectedDocumentId(""); }} actionCount={actionRequiredCount} />;
 
   if (viewer.role === "client_signer") {
     return (
@@ -2248,6 +2408,16 @@ function Documents({ docs, onAddDoc, onUpdateDoc }: { docs: TradeDoc[]; onAddDoc
         <PageTitle title="Documents" subtitle="Sponsor and platform review for private asset documents" />
         {roleTabs}
         <SponsorDocumentsView docs={visibleDocs} viewer={viewer} />
+      </>
+    );
+  }
+
+  if (viewer.role === "external_platform") {
+    return (
+      <>
+        <PageTitle title="Documents" subtitle="Limited platform document operations and callback status" />
+        {roleTabs}
+        <BrokerDocumentsView docs={visibleDocs} viewer={viewer} onUpdateDoc={onUpdateDoc} onAddDoc={() => setAddDocOpen(true)} />
       </>
     );
   }
