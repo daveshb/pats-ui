@@ -395,6 +395,13 @@ interface RolePermissionDefinition {
   privateAssets: string;
   roleAdministration: string;
   canCreateDocuments: boolean;
+  canCreateTrades: boolean;
+  canManageBrokers: boolean;
+  canManageWorkflows: boolean;
+  canManageHouseholds: boolean;
+  canOperateExecution: boolean;
+  canManageIntegrations: boolean;
+  canAdministerRoles: boolean;
 }
 
 const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
@@ -414,6 +421,13 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     privateAssets: "All private assets",
     roleAdministration: "Allowed",
     canCreateDocuments: true,
+    canCreateTrades: true,
+    canManageBrokers: true,
+    canManageWorkflows: true,
+    canManageHouseholds: true,
+    canOperateExecution: true,
+    canManageIntegrations: true,
+    canAdministerRoles: true,
   },
   broker: {
     summary: "Broker team role for scoped private asset operations and document preparation.",
@@ -431,6 +445,13 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     privateAssets: "Broker scoped assets",
     roleAdministration: "Hidden",
     canCreateDocuments: true,
+    canCreateTrades: true,
+    canManageBrokers: false,
+    canManageWorkflows: false,
+    canManageHouseholds: false,
+    canOperateExecution: false,
+    canManageIntegrations: false,
+    canAdministerRoles: false,
   },
   wealth_manager: {
     summary: "Advisor visibility role for client status, documents, and assigned households.",
@@ -448,6 +469,13 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     privateAssets: "Read only when applicable",
     roleAdministration: "Hidden",
     canCreateDocuments: false,
+    canCreateTrades: false,
+    canManageBrokers: false,
+    canManageWorkflows: false,
+    canManageHouseholds: false,
+    canOperateExecution: false,
+    canManageIntegrations: false,
+    canAdministerRoles: false,
   },
   client_signer: {
     summary: "Client signing role focused on personal documents and associated profile data.",
@@ -465,6 +493,13 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     privateAssets: "Read only when applicable",
     roleAdministration: "Hidden",
     canCreateDocuments: false,
+    canCreateTrades: false,
+    canManageBrokers: false,
+    canManageWorkflows: false,
+    canManageHouseholds: false,
+    canOperateExecution: false,
+    canManageIntegrations: false,
+    canAdministerRoles: false,
   },
   asset_sponsor: {
     summary: "Sponsor role for assigned private assets and sponsor document review.",
@@ -482,6 +517,13 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     privateAssets: "Own assets",
     roleAdministration: "Hidden",
     canCreateDocuments: false,
+    canCreateTrades: false,
+    canManageBrokers: false,
+    canManageWorkflows: false,
+    canManageHouseholds: false,
+    canOperateExecution: false,
+    canManageIntegrations: false,
+    canAdministerRoles: false,
   },
   external_platform: {
     summary: "Integration user for limited document operations and technical handoffs.",
@@ -499,6 +541,13 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     privateAssets: "Hidden",
     roleAdministration: "Hidden",
     canCreateDocuments: false,
+    canCreateTrades: false,
+    canManageBrokers: false,
+    canManageWorkflows: false,
+    canManageHouseholds: false,
+    canOperateExecution: false,
+    canManageIntegrations: false,
+    canAdministerRoles: false,
   },
 };
 
@@ -856,6 +905,14 @@ function MetricCard({ label, value, delta }: { label: string; value: string; del
   );
 }
 
+function ReadOnlyNotice({ label }: { label: string }) {
+  return (
+    <div className="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+      <span className="font-semibold text-amber-200">View only.</span> {label}
+    </div>
+  );
+}
+
 const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "trades", label: "PATS Blotter", icon: ArrowLeftRight },
@@ -879,6 +936,71 @@ function roleCanAccessNav(role: AccessRole, key: NavKey) {
 
 function navItemsForRole(role: AccessRole) {
   return navItems.filter((item) => roleCanAccessNav(role, item.key));
+}
+
+function RoleSelect({
+  value,
+  onChange,
+  compact = false,
+  className = "",
+}: {
+  value: AccessRole;
+  onChange: (role: AccessRole) => void;
+  compact?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = accessRoleLabels[value];
+
+  return (
+    <div className={`relative ${className}`}>
+      {open && (
+        <button
+          type="button"
+          aria-label="Close role menu"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 cursor-default bg-black/35 backdrop-blur-[1px]"
+        />
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`relative z-50 flex w-full items-center justify-between gap-2 rounded-md border border-slate-700 bg-[#0b0d11] text-left font-semibold text-slate-100 outline-none transition hover:border-sky-400/50 hover:bg-slate-950 focus:border-sky-400/70 ${
+          compact ? "h-8 px-2.5 text-xs" : "h-9 px-3 text-xs"
+        }`}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition ${open ? "rotate-180 text-sky-300" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+8px)] z-50 w-full min-w-[220px] rounded-lg border border-slate-700 bg-[#080a0d] p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+          {Object.entries(accessRoleLabels).map(([roleValue, label]) => {
+            const role = roleValue as AccessRole;
+            const selected = role === value;
+            return (
+              <button
+                key={role}
+                type="button"
+                onClick={() => {
+                  onChange(role);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition ${
+                  selected ? "bg-sky-400/12 text-sky-100" : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                }`}
+              >
+                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-sky-300" : "bg-slate-600"}`} />
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-semibold">{label}</span>
+                  <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-500">{accessRoleScopeHints[role]}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Sidebar({ active, role, onSelect }: { active: NavKey; role: AccessRole; onSelect: (key: NavKey) => void }) {
@@ -930,7 +1052,7 @@ function Sidebar({ active, role, onSelect }: { active: NavKey; role: AccessRole;
 
 function TopBar({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role: AccessRole) => void }) {
   return (
-    <header className="sticky top-0 z-20 ml-60 flex h-14 items-center justify-between border-b border-slate-800 bg-[#0b0d11]/95 px-5 backdrop-blur">
+    <header className="sticky top-0 z-50 ml-60 flex h-14 items-center justify-between border-b border-slate-800 bg-[#0b0d11]/95 px-5 backdrop-blur">
       <div className="relative w-full max-w-xl">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
         <input
@@ -940,17 +1062,9 @@ function TopBar({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role:
       </div>
       <div className="flex items-center gap-4">
         <span className="rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[9px] font-semibold text-emerald-300">Production</span>
-        <div className="flex items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-2.5 py-1.5">
+        <div className="flex w-48 items-center gap-2 rounded-md border border-slate-800 bg-[#11151b] px-2 py-1.5">
           <Shield className="h-3.5 w-3.5 text-sky-300" />
-          <select
-            value={role}
-            onChange={(event) => onRoleChange(event.target.value as AccessRole)}
-            className="h-6 bg-transparent text-xs font-semibold text-slate-100 outline-none"
-          >
-            {Object.entries(accessRoleLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+          <RoleSelect value={role} onChange={onRoleChange} compact className="min-w-0 flex-1" />
         </div>
         <div className="relative">
           <Bell className="h-4 w-4 text-slate-400" />
@@ -1049,6 +1163,7 @@ function Dashboard({ role, onSelect }: { role: AccessRole; onSelect: (key: NavKe
   const exceptionCount = trades.filter((trade) => trade.status === "unresolved" || trade.status === "needs_review").length;
   const tradeReviewTarget: NavKey = roleCanAccessNav(role, "externalTrades") ? "externalTrades" : roleCanAccessNav(role, "trades") ? "trades" : "documents";
   const canOpenIntegrations = roleCanAccessNav(role, "integrations");
+  const integrationsActionLabel = rolePermissions[role].canManageIntegrations ? "Manage" : "View";
   const queueRows = trades.slice(0, 4).map((trade) => ({
     broker: trade.broker,
     asset: trade.asset,
@@ -1152,7 +1267,7 @@ function Dashboard({ role, onSelect }: { role: AccessRole; onSelect: (key: NavKe
             <h2 className="text-base font-semibold text-white">Integration status</h2>
             <p className="mt-1 text-xs text-slate-500">Vantage, broker, document, and fill delivery health</p>
           </div>
-          {canOpenIntegrations && <button onClick={() => onSelect("integrations")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">Manage <ChevronRight className="h-3.5 w-3.5" /></button>}
+          {canOpenIntegrations && <button onClick={() => onSelect("integrations")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">{integrationsActionLabel} <ChevronRight className="h-3.5 w-3.5" /></button>}
         </div>
         <div className="grid grid-cols-4 gap-3">
           {["Vantage Blotter API", "Private Broker API", "DocuSign / iCapital", "Fill Return API"].map((item) => (
@@ -1213,12 +1328,13 @@ function TradeRow({ trade, compact = false, onClick }: { trade: Trade; compact?:
   );
 }
 
-function Trades({ trades: localTrades, openNewTrade, openTrade }: { trades: Trade[]; openNewTrade: () => void; openTrade: (trade: Trade) => void }) {
+function Trades({ trades: localTrades, role, openNewTrade, openTrade }: { trades: Trade[]; role: AccessRole; openNewTrade: () => void; openTrade: (trade: Trade) => void }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [statusDropOpen, setStatusDropOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [brokerFilter, setBrokerFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const canCreateTrades = rolePermissions[role].canCreateTrades;
 
   const uniqueBrokers = Array.from(new Set(localTrades.map(t => t.broker)));
   const statuses = ["all", "validated", "workflow_required", "unresolved", "needs_review"];
@@ -1246,8 +1362,9 @@ function Trades({ trades: localTrades, openNewTrade, openTrade }: { trades: Trad
       <PageTitle
         title="PATS Trade Blotter"
         subtitle="Trades after PATS checks the broker, asset, workflow, and next action"
-        action={<button onClick={openNewTrade} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />New Manual Trade</button>}
+        action={canCreateTrades ? <button onClick={openNewTrade} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />New Manual Trade</button> : undefined}
       />
+      {!canCreateTrades && <ReadOnlyNotice label="This role can inspect trades and workflow status, but cannot create manual trades or change trade routing." />}
       <Toolbar placeholder="Search trade, ticker, broker, private asset, investor, or workflow status...">
         <div className="relative">
           <button onClick={() => setStatusDropOpen(v => !v)} className="h-9 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">
@@ -1377,12 +1494,14 @@ function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
   );
 }
 
-function Brokers({ brokers: localBrokers, updateBroker, openNewBroker }: { brokers: Broker[]; updateBroker: (id: string, p: Partial<Broker>) => void; openNewBroker: () => void }) {
+function Brokers({ brokers: localBrokers, role, updateBroker, openNewBroker }: { brokers: Broker[]; role: AccessRole; updateBroker: (id: string, p: Partial<Broker>) => void; openNewBroker: () => void }) {
   const [expandedBroker, setExpandedBroker] = useState<string | null>(null);
+  const canManageBrokers = rolePermissions[role].canManageBrokers;
 
   return (
     <>
-      <PageTitle title="Asset Brokers" subtitle="Brokers from Vantage with the PATS settings needed for private asset trades" action={<button onClick={openNewBroker} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Enable Broker</button>} />
+      <PageTitle title="Asset Brokers" subtitle="Brokers from Vantage with the PATS settings needed for private asset trades" action={canManageBrokers ? <button onClick={openNewBroker} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Enable Broker</button> : undefined} />
+      {!canManageBrokers && <ReadOnlyNotice label="Broker settings are visible for context, but enabling, disabling, or editing broker routing is reserved for Ops." />}
       <Toolbar placeholder="Search broker, workflow owner, fill return, asset, or ticker..." />
       <ShellCard className="overflow-hidden">
         <div className="grid grid-cols-[1.55fr_0.7fr_1fr_1.05fr_0.55fr_0.55fr_0.55fr_0.35fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
@@ -1428,23 +1547,25 @@ function Brokers({ brokers: localBrokers, updateBroker, openNewBroker }: { broke
                           <Info label="Workflow owner" value={broker.workflowOwner} />
                           <Info label="Fill return" value={broker.fillReturn} />
                         </div>
-                        <div className="mt-4">
-                          {broker.status === "Active" ? (
-                            <button
-                              onClick={() => updateBroker(broker.patsBrokerProfileId, { status: "Disconnected" })}
-                              className="flex h-8 items-center gap-1.5 rounded-md border border-rose-400/30 bg-rose-400/10 px-3 text-xs font-semibold text-rose-300 hover:bg-rose-400/20"
-                            >
-                              Disable broker
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => updateBroker(broker.patsBrokerProfileId, { status: "Active" })}
-                              className="flex h-8 items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20"
-                            >
-                              Re-enable broker
-                            </button>
-                          )}
-                        </div>
+                        {canManageBrokers && (
+                          <div className="mt-4">
+                            {broker.status === "Active" ? (
+                              <button
+                                onClick={() => updateBroker(broker.patsBrokerProfileId, { status: "Disconnected" })}
+                                className="flex h-8 items-center gap-1.5 rounded-md border border-rose-400/30 bg-rose-400/10 px-3 text-xs font-semibold text-rose-300 hover:bg-rose-400/20"
+                              >
+                                Disable broker
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => updateBroker(broker.patsBrokerProfileId, { status: "Active" })}
+                                className="flex h-8 items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20"
+                              >
+                                Re-enable broker
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-slate-300">Broker tickers</p>
@@ -1685,9 +1806,10 @@ function WorkflowsLegacy() {
   );
 }
 
-function Workflows({ workflows: localWorkflows, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
+function Workflows({ workflows: localWorkflows, role, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; role: AccessRole; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(localWorkflows[0]?.id ?? "");
   const [workflowPanel, setWorkflowPanel] = useState<"template" | "requirement" | null>(null);
+  const canManageWorkflows = rolePermissions[role].canManageWorkflows;
   const selectedWorkflow = localWorkflows.find((flow) => flow.id === selectedWorkflowId) ?? localWorkflows[0];
   const selectedAsset = assets.find((asset) => asset.privateAssetId === selectedWorkflow?.privateAssetId);
   const selectedRequirements = (selectedWorkflow?.requirementTypes ?? []).map((type, index) => ({
@@ -1704,12 +1826,15 @@ function Workflows({ workflows: localWorkflows, onAddWorkflow, onUpdateWorkflow 
         title="Workflows"
         subtitle="Rules for each private asset that decide if a trade can move forward or needs steps first"
         action={
-          <div className="flex gap-2">
-            <button onClick={() => setWorkflowPanel("requirement")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
-            <button onClick={() => setWorkflowPanel("template")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
-          </div>
+          canManageWorkflows ? (
+            <div className="flex gap-2">
+              <button onClick={() => setWorkflowPanel("requirement")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
+              <button onClick={() => setWorkflowPanel("template")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
+            </div>
+          ) : undefined
         }
       />
+      {!canManageWorkflows && <ReadOnlyNotice label="Workflow rules are shown for traceability, but this role cannot create templates or add requirements." />}
       <Toolbar placeholder="Search workflow, broker, private asset, policy, requirement, or status..." />
       <div className="grid grid-cols-[0.95fr_1.4fr] gap-5">
         <ShellCard className="overflow-hidden">
@@ -1821,8 +1946,8 @@ function Workflows({ workflows: localWorkflows, onAddWorkflow, onUpdateWorkflow 
           </ShellCard>
         </div>
       </div>
-      {workflowPanel === "template" && <CreateWorkflowTemplatePanel onAdd={onAddWorkflow} onClose={() => setWorkflowPanel(null)} />}
-      {workflowPanel === "requirement" && selectedWorkflow && <AddWorkflowRequirementPanel workflow={selectedWorkflow} onUpdate={(types) => onUpdateWorkflow(selectedWorkflow.id, { requirementTypes: types, requirements: `${types.length} requirement${types.length !== 1 ? "s" : ""}` })} onClose={() => setWorkflowPanel(null)} />}
+      {canManageWorkflows && workflowPanel === "template" && <CreateWorkflowTemplatePanel onAdd={onAddWorkflow} onClose={() => setWorkflowPanel(null)} />}
+      {canManageWorkflows && workflowPanel === "requirement" && selectedWorkflow && <AddWorkflowRequirementPanel workflow={selectedWorkflow} onUpdate={(types) => onUpdateWorkflow(selectedWorkflow.id, { requirementTypes: types, requirements: `${types.length} requirement${types.length !== 1 ? "s" : ""}` })} onClose={() => setWorkflowPanel(null)} />}
     </>
   );
 }
@@ -2646,7 +2771,7 @@ function AddDocumentPanel({ viewer, onAdd, onClose }: { viewer: DocumentViewer; 
     const step = stepsForTrade.find(s => s.tradeWorkflowStepId === selectedStepId) ?? stepsForTrade[0];
     const req = workflowRequirements.find(r => r.workflowRequirementId === selectedReqId) ?? workflowRequirements[0];
     onAdd({
-      tradeDocumentId: `tdoc_${Date.now()}`,
+      tradeDocumentId: nextMockId("tdoc"),
       inboundTradeId: selectedTradeId,
       tradeWorkflowStepId: step?.tradeWorkflowStepId ?? "tws_doc_001",
       workflowRequirementId: req?.workflowRequirementId ?? "wr_subscription_agreement",
@@ -2827,10 +2952,11 @@ function AddDocumentPanel({ viewer, onAdd, onClose }: { viewer: DocumentViewer; 
   );
 }
 
-function Execution() {
+function Execution({ role }: { role: AccessRole }) {
   const [flows, setFlows] = useState<ExecutionFlowRecord[]>(executionFlows);
   const [fillPanelFlow, setFillPanelFlow] = useState<ExecutionFlowRecord | null>(null);
   const [failedFill, setFailedFill] = useState<{ flowId: string; fillId: string } | null>(null);
+  const canOperateExecution = rolePermissions[role].canOperateExecution;
 
   const updateFlow = (tradeId: string, updater: (flow: ExecutionFlowRecord) => ExecutionFlowRecord) => {
     setFlows(current => current.map(flow => flow.tradeId === tradeId ? updater(flow) : flow));
@@ -2878,6 +3004,7 @@ function Execution() {
   return (
     <>
       <PageTitle title="Execution Flow" subtitle="Validated trades, execution records, fills, and return status back to Vantage" />
+      {!canOperateExecution && <ReadOnlyNotice label="Execution status, fills, and return state are visible, but this role cannot create executions, add fills, confirm fills, or mark returns." />}
       <div className="space-y-4">
         {flows.map((flow) => (
           <ShellCard key={flow.tradeId} className="p-5">
@@ -2942,7 +3069,7 @@ function Execution() {
                   <Info label="External execution" value={flow.externalExecutionId ?? "-"} />
                   <Info label="Action" value={executionPrimaryAction(flow)} />
                 </div>
-                {!flow.executionId && (
+                {canOperateExecution && !flow.executionId && (
                   <button onClick={() => createExecution(flow)} className="mt-4 h-8 w-full rounded-md bg-sky-500 text-xs font-semibold text-white">
                     Create Execution
                   </button>
@@ -2954,7 +3081,7 @@ function Execution() {
                   <h3 className="text-xs font-semibold text-white">Fills</h3>
                   <div className="flex items-center gap-2">
                     <StatusBadge value={executionFillSummary(flow)} tone={flow.fills.length ? undefined : "gray"} />
-                    {flow.executionId && (
+                    {canOperateExecution && flow.executionId && (
                       <button onClick={() => setFillPanelFlow(flow)} className="rounded-md border border-sky-400/30 px-2 py-1 text-[11px] font-semibold text-sky-300 hover:bg-sky-400/10">
                         {flow.fills.length ? "Add Fill" : "Create Fill"}
                       </button>
@@ -2980,46 +3107,48 @@ function Execution() {
                         <Info label="Net" value={fill.netAmount ?? "-"} />
                         <Info label="Return" value={displayLabel(fill.returnStatus)} />
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {fill.status === "pending" && (
-                          <button
-                            onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, status: "confirmed", returnStatus: "ready_to_return" }))}
-                            className="h-7 rounded-md bg-emerald-500 px-3 text-[11px] font-semibold text-white"
-                          >
-                            Confirm Fill
-                          </button>
-                        )}
-                        {fill.status === "confirmed" && fill.returnStatus === "ready_to_return" && (
-                          <>
+                      {canOperateExecution && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {fill.status === "pending" && (
+                            <button
+                              onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, status: "confirmed", returnStatus: "ready_to_return" }))}
+                              className="h-7 rounded-md bg-emerald-500 px-3 text-[11px] font-semibold text-white"
+                            >
+                              Confirm Fill
+                            </button>
+                          )}
+                          {fill.status === "confirmed" && fill.returnStatus === "ready_to_return" && (
+                            <>
+                              <button
+                                onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "returned", returnedAt: "Just now" }))}
+                                className="h-7 rounded-md bg-sky-500 px-3 text-[11px] font-semibold text-white"
+                              >
+                                Mark Returned
+                              </button>
+                              <button
+                                onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "manual_return_required" }))}
+                                className="h-7 rounded-md border border-amber-400/30 px-3 text-[11px] font-semibold text-amber-300"
+                              >
+                                Manual Return
+                              </button>
+                              <button
+                                onClick={() => setFailedFill({ flowId: flow.tradeId, fillId: fill.fillId })}
+                                className="h-7 rounded-md border border-rose-400/30 px-3 text-[11px] font-semibold text-rose-300"
+                              >
+                                Return Failed
+                              </button>
+                            </>
+                          )}
+                          {fill.status === "confirmed" && fill.returnStatus === "manual_return_required" && (
                             <button
                               onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "returned", returnedAt: "Just now" }))}
                               className="h-7 rounded-md bg-sky-500 px-3 text-[11px] font-semibold text-white"
                             >
-                              Mark Returned
+                              Mark Manual Returned
                             </button>
-                            <button
-                              onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "manual_return_required" }))}
-                              className="h-7 rounded-md border border-amber-400/30 px-3 text-[11px] font-semibold text-amber-300"
-                            >
-                              Manual Return
-                            </button>
-                            <button
-                              onClick={() => setFailedFill({ flowId: flow.tradeId, fillId: fill.fillId })}
-                              className="h-7 rounded-md border border-rose-400/30 px-3 text-[11px] font-semibold text-rose-300"
-                            >
-                              Return Failed
-                            </button>
-                          </>
-                        )}
-                        {fill.status === "confirmed" && fill.returnStatus === "manual_return_required" && (
-                          <button
-                            onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, returnStatus: "returned", returnedAt: "Just now" }))}
-                            className="h-7 rounded-md bg-sky-500 px-3 text-[11px] font-semibold text-white"
-                          >
-                            Mark Manual Returned
-                          </button>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -3054,7 +3183,7 @@ function Execution() {
           </ShellCard>
         ))}
       </div>
-      {fillPanelFlow && (
+      {canOperateExecution && fillPanelFlow && (
         <ExecutionFillPanel
           flow={fillPanelFlow}
           onClose={() => setFillPanelFlow(null)}
@@ -3064,7 +3193,7 @@ function Execution() {
           }}
         />
       )}
-      {failedFill && (
+      {canOperateExecution && failedFill && (
         <ReturnFailedPanel
           onClose={() => setFailedFill(null)}
           onSave={(reason) => {
@@ -3179,7 +3308,8 @@ function ReturnFailedPanel({ onSave, onClose }: { onSave: (reason: string) => vo
   );
 }
 
-function Integrations() {
+function Integrations({ role }: { role: AccessRole }) {
+  const canManageIntegrations = rolePermissions[role].canManageIntegrations;
   const rows = [
     ["Vantage Blotter API", "Inbound trades and outbound fill return", "1,245", "99.9%", "42ms", "2 minutes ago"],
     ["Private Broker API", "Broker routing, confirmations, and fill intake", "3,882", "99.7%", "18ms", "1 minute ago"],
@@ -3189,6 +3319,7 @@ function Integrations() {
   return (
     <>
       <PageTitle title="Integrations" subtitle="Manage Vantage, broker, document, and fill-return connections" />
+      {!canManageIntegrations && <ReadOnlyNotice label="Integration health is visible, but credentials, routing configuration, and connection settings are hidden for this role." />}
       <div className="mb-5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-400" />All systems operational</div>
         <p className="mt-2 text-xs text-slate-400">Inbound blotter, broker routing, workflow documents, and fill return are currently healthy.</p>
@@ -3201,7 +3332,10 @@ function Integrations() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-400/10"><Plug className="h-4 w-4 text-sky-300" /></div>
                 <div><h2 className="text-sm font-semibold text-white">{name}</h2><p className="mt-1 text-xs text-slate-500">{desc}</p></div>
               </div>
-              <div className="flex items-center gap-4"><StatusBadge value="Connected" /><Settings className="h-4 w-4 text-slate-500" /></div>
+              <div className="flex items-center gap-4">
+                <StatusBadge value="Connected" />
+                {canManageIntegrations ? <Settings className="h-4 w-4 text-slate-500" /> : <StatusBadge value="View only" tone="gray" />}
+              </div>
             </div>
             <div className="mt-5 grid grid-cols-4 gap-3">
               <InfoBox label="Requests Today" value={requests} />
@@ -3283,10 +3417,17 @@ function RoleAccessPreview({ role, onRoleChange }: { role: AccessRole; onRoleCha
     ["Contacts", permissions.contacts],
     ["Private Assets", permissions.privateAssets],
     ["Role Administration", permissions.roleAdministration],
+    ["Manual Trade Creation", permissions.canCreateTrades ? "Allowed" : "Hidden"],
+    ["Broker Configuration", permissions.canManageBrokers ? "Allowed" : "View only / hidden actions"],
+    ["Workflow Configuration", permissions.canManageWorkflows ? "Allowed" : "View only / hidden actions"],
+    ["Execution Actions", permissions.canOperateExecution ? "Allowed" : roleCanAccessNav(role, "execution") ? "View only" : "Hidden"],
+    ["Contact / Account Edits", permissions.canManageHouseholds ? "Allowed" : roleCanAccessNav(role, "households") ? "View only" : "Hidden"],
+    ["Integration Settings", permissions.canManageIntegrations ? "Allowed" : roleCanAccessNav(role, "integrations") ? "View only" : "Hidden"],
+    ["Role Assignment Actions", permissions.canAdministerRoles ? "Allowed" : "Hidden"],
   ];
 
   return (
-    <ShellCard className="mb-5 overflow-hidden">
+    <ShellCard className="mb-5 overflow-visible">
       <div className="grid grid-cols-[0.95fr_1.65fr] gap-0">
         <div className="border-r border-slate-800/80 p-5">
           <div className="flex items-start justify-between gap-4">
@@ -3297,19 +3438,13 @@ function RoleAccessPreview({ role, onRoleChange }: { role: AccessRole; onRoleCha
             <StatusBadge value={accessRoleLabels[role]} tone="blue" />
           </div>
 
-          <select
-            value={role}
-            onChange={(event) => onRoleChange(event.target.value as AccessRole)}
-            className="mt-5 h-9 w-full rounded-md border border-slate-700 bg-[#0b0d11] px-3 text-xs font-semibold text-slate-100 outline-none focus:border-sky-400/70"
-          >
-            {Object.entries(accessRoleLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+          <RoleSelect value={role} onChange={onRoleChange} className="mt-5" />
 
           <div className="mt-5 grid grid-cols-2 gap-2">
             <Info label="Visible views" value={`${visibleViews.length}`} />
             <Info label="Document create" value={permissions.canCreateDocuments ? "Yes" : "No"} />
+            <Info label="Execution actions" value={permissions.canOperateExecution ? "Yes" : "No"} />
+            <Info label="Admin actions" value={permissions.canAdministerRoles ? "Yes" : "No"} />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -3408,7 +3543,7 @@ function UserAccessPage({
 
       <RoleAccessPreview role={previewRole} onRoleChange={setPreviewRole} />
 
-      <ShellCard className="overflow-hidden">
+      <ShellCard className="overflow-visible">
         <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-white">Role administration</h2>
@@ -3442,15 +3577,7 @@ function UserAccessPage({
               <StatusBadge value={user.status.replace("_", " ")} tone={accessStatusTone(user.status)} />
 
               <div>
-                <select
-                  value={role}
-                  onChange={(event) => setDraftRole(user, event.target.value as AccessRole)}
-                  className="h-8 w-full rounded-md border border-slate-700 bg-[#0b0d11] px-2.5 text-xs font-semibold text-slate-100 outline-none focus:border-sky-400/70"
-                >
-                  {Object.entries(accessRoleLabels).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
+                <RoleSelect value={role} onChange={(nextRole) => setDraftRole(user, nextRole)} compact />
               </div>
 
               <div className="min-w-0">
@@ -3903,9 +4030,10 @@ function ConfigureBrokerPanel({ onAdd, onClose }: { onAdd: (b: Broker) => void; 
   );
 }
 
-function Households() {
+function Households({ role }: { role: AccessRole }) {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState(households[0]?.householdId ?? "");
   const [householdPanel, setHouseholdPanel] = useState<"create" | "person" | "account" | null>(null);
+  const canManageHouseholds = rolePermissions[role].canManageHouseholds;
   const selectedHousehold = households.find((h) => h.householdId === selectedHouseholdId) ?? households[0];
   const primaryContact = householdPersons.find((p) => p.personId === selectedHousehold.primaryContactId);
   const personsInHousehold = householdPersons.filter((p) => p.householdId === selectedHousehold.householdId);
@@ -3917,11 +4045,12 @@ function Households() {
         title="Contacts"
         subtitle="Households, persons, and accounts associated with private asset trading"
         action={
-          <button onClick={() => setHouseholdPanel("create")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
+          canManageHouseholds ? <button onClick={() => setHouseholdPanel("create")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
             <Plus className="h-3.5 w-3.5" />New Household
-          </button>
+          </button> : undefined
         }
       />
+      {!canManageHouseholds && <ReadOnlyNotice label="Contact, household, person, and account information is visible according to scope, but add/edit actions are hidden." />}
       <Toolbar placeholder="Search household, person, account, custodian, or status..." />
       <div className="grid grid-cols-[0.85fr_1.5fr] gap-5">
         <ShellCard className="overflow-hidden">
@@ -3993,9 +4122,11 @@ function Households() {
                 <h2 className="text-sm font-semibold text-slate-100">Persons</h2>
                 <p className="mt-1 text-[11px] text-slate-500">Members, signers, and trustees associated with this household.</p>
               </div>
-              <button onClick={() => setHouseholdPanel("person")} className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
-                <Plus className="h-3 w-3" />Add
-              </button>
+              {canManageHouseholds && (
+                <button onClick={() => setHouseholdPanel("person")} className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
+                  <Plus className="h-3 w-3" />Add
+                </button>
+              )}
             </div>
             <div className="divide-y divide-slate-800/80">
               {personsInHousehold.length === 0 ? (
@@ -4063,9 +4194,11 @@ function Households() {
                 <h2 className="text-sm font-semibold text-slate-100">Accounts</h2>
                 <p className="mt-1 text-[11px] text-slate-500">Custodian accounts linked to this household with their authorized signers.</p>
               </div>
-              <button onClick={() => setHouseholdPanel("account")} className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
-                <Plus className="h-3 w-3" />Add
-              </button>
+              {canManageHouseholds && (
+                <button onClick={() => setHouseholdPanel("account")} className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
+                  <Plus className="h-3 w-3" />Add
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-[1fr_0.85fr_0.9fr_1.5fr_1.3fr_0.65fr] border-b border-slate-800 bg-slate-950/40 px-5 py-2 text-[8px] font-semibold text-slate-600">
               <span>Account number</span>
@@ -4124,9 +4257,9 @@ function Households() {
           </ShellCard>
         </div>
       </div>
-      {householdPanel === "create" && <CreateHouseholdPanel onClose={() => setHouseholdPanel(null)} />}
-      {householdPanel === "person" && <AddPersonPanel household={selectedHousehold} onClose={() => setHouseholdPanel(null)} />}
-      {householdPanel === "account" && <AddAccountPanel household={selectedHousehold} persons={personsInHousehold} onClose={() => setHouseholdPanel(null)} />}
+      {canManageHouseholds && householdPanel === "create" && <CreateHouseholdPanel onClose={() => setHouseholdPanel(null)} />}
+      {canManageHouseholds && householdPanel === "person" && <AddPersonPanel household={selectedHousehold} onClose={() => setHouseholdPanel(null)} />}
+      {canManageHouseholds && householdPanel === "account" && <AddAccountPanel household={selectedHousehold} persons={personsInHousehold} onClose={() => setHouseholdPanel(null)} />}
     </>
   );
 }
@@ -4437,6 +4570,8 @@ export default function PatsPlatform() {
   };
   const changeRole = (role: AccessRole) => {
     setActiveRole(role);
+    if (!rolePermissions[role].canCreateTrades) setNewTradeOpen(false);
+    if (!rolePermissions[role].canManageBrokers) setNewBrokerOpen(false);
     if (!roleCanAccessNav(role, active)) setActive("dashboard");
   };
 
@@ -4448,15 +4583,15 @@ export default function PatsPlatform() {
       <main className="ml-60 min-h-[calc(100vh-94px)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.055),transparent_32%),linear-gradient(180deg,#0b0d11_0%,#080a0d_100%)] px-5 py-5">
         <div className="mx-auto max-w-[1560px]">
           {active === "dashboard" && <Dashboard role={activeRole} onSelect={selectNav} />}
-          {active === "trades" && <Trades trades={localTrades} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
+          {active === "trades" && <Trades trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
           {active === "externalTrades" && <ExternalTrades openItem={setSelectedExternal} />}
-          {active === "brokers" && <Brokers brokers={localBrokers} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
+          {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets />}
-          {active === "workflows" && <Workflows workflows={localWorkflows} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
+          {active === "workflows" && <Workflows workflows={localWorkflows} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onRoleChange={changeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
-          {active === "households" && <Households />}
-          {active === "execution" && <Execution />}
-          {active === "integrations" && <Integrations />}
+          {active === "households" && <Households role={activeRole} />}
+          {active === "execution" && <Execution role={activeRole} />}
+          {active === "integrations" && <Integrations role={activeRole} />}
           {active === "userAccess" && <UserAccessPage users={localUserAccess} onUpdateUser={updateUserAccess} />}
           {active === "activity" && <ActivityLog />}
           {active === "alerts" && <AlertsPage />}
@@ -4465,8 +4600,8 @@ export default function PatsPlatform() {
       </main>
       {selectedTrade && <TradeDetails trade={selectedTrade} onClose={() => setSelectedTrade(null)} />}
       {selectedExternal && <ExternalTradeDetails id={selectedExternal} onClose={() => setSelectedExternal(null)} />}
-      {newTradeOpen && <NewTradePanel allTrades={localTrades} onAdd={addTrade} onClose={() => setNewTradeOpen(false)} />}
-      {newBrokerOpen && <ConfigureBrokerPanel onAdd={addBroker} onClose={() => setNewBrokerOpen(false)} />}
+      {newTradeOpen && rolePermissions[activeRole].canCreateTrades && <NewTradePanel allTrades={localTrades} onAdd={addTrade} onClose={() => setNewTradeOpen(false)} />}
+      {newBrokerOpen && rolePermissions[activeRole].canManageBrokers && <ConfigureBrokerPanel onAdd={addBroker} onClose={() => setNewBrokerOpen(false)} />}
     </div>
   );
 }
