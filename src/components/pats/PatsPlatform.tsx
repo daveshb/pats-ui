@@ -52,6 +52,7 @@ type NavKey =
   | "households"
   | "execution"
   | "integrations"
+  | "userAccess"
   | "activity"
   | "alerts"
   | "settings";
@@ -197,6 +198,8 @@ interface TradeDoc {
 }
 
 type DocumentViewerRole = "pats_ops" | "broker" | "wealth_manager" | "client_signer" | "asset_sponsor";
+type AccessRole = DocumentViewerRole | "external_platform";
+type AccessStatus = "pending" | "active" | "inactive" | "role_removed";
 
 interface DocumentViewer {
   contactId: string;
@@ -207,6 +210,19 @@ interface DocumentViewer {
   accountIds?: string[];
   personIds?: string[];
   assetIds?: string[];
+}
+
+interface UserAccessRequest {
+  userId: string;
+  displayName: string;
+  email: string;
+  company: string;
+  requestedRole?: AccessRole;
+  assignedRole?: AccessRole;
+  status: AccessStatus;
+  scopeLabel: string;
+  lastActivity: string;
+  notes: string;
 }
 
 interface ExecutionFill {
@@ -342,6 +358,33 @@ const documentViewers: DocumentViewer[] = [
   { contactId: "wm_chen", label: "Wealth manager", role: "wealth_manager", householdIds: ["hh_001", "hh_002"], accountIds: ["acc_001", "acc_002", "acc_003", "acc_004"] },
   { contactId: "per_001", label: "Client signer", role: "client_signer", householdIds: ["hh_001"], accountIds: ["acc_001", "acc_002"], personIds: ["per_001"] },
   { contactId: "sponsor_techcorp", label: "Asset sponsor", role: "asset_sponsor", assetIds: ["pa_tech_a", "pa_fintech_d"] },
+];
+
+const accessRoleLabels: Record<AccessRole, string> = {
+  pats_ops: "Ops",
+  broker: "Broker",
+  wealth_manager: "Wealth Manager",
+  client_signer: "Client Signer",
+  asset_sponsor: "Asset Sponsor",
+  external_platform: "External Platform",
+};
+
+const accessRoleScopeHints: Record<AccessRole, string> = {
+  pats_ops: "All operational queues",
+  broker: "Broker profile scope",
+  wealth_manager: "Household or account scope",
+  client_signer: "Person and signature scope",
+  asset_sponsor: "Private asset scope",
+  external_platform: "Platform contact scope",
+};
+
+const userAccessSeeds: UserAccessRequest[] = [
+  { userId: "usr_pending_001", displayName: "Mariana Lopez", email: "mariana.lopez@acme.com", company: "Acme Capital", requestedRole: "wealth_manager", status: "pending", scopeLabel: "Chen household group", lastActivity: "Today, 8:42 AM", notes: "New advisor user waiting for household scope review" },
+  { userId: "usr_pending_002", displayName: "Daniel Brooks", email: "daniel.brooks@gsas.com", company: "Goldman Sachs Advisor Solutions", requestedRole: "broker", status: "pending", scopeLabel: "GSAS private asset desk", lastActivity: "Today, 8:11 AM", notes: "Broker user created after Vantage broker sync" },
+  { userId: "usr_pending_003", displayName: "Sarah Chen", email: "sarah.chen@example.com", company: "Chen Family Office", requestedRole: "client_signer", status: "pending", scopeLabel: "Sarah Chen person record", lastActivity: "Yesterday, 4:30 PM", notes: "Client needs signer access before subscription packet is sent" },
+  { userId: "usr_active_001", displayName: "Maya Singh", email: "maya.singh@gsas.com", company: "Goldman Sachs Advisor Solutions", assignedRole: "broker", status: "active", scopeLabel: "Goldman broker profile", lastActivity: "Today, 7:55 AM", notes: "Can prepare broker-owned documents and review scoped trades" },
+  { userId: "usr_active_002", displayName: "System Admin", email: "ops@pats.local", company: "PATS Operations", assignedRole: "pats_ops", status: "active", scopeLabel: "All PATS operations", lastActivity: "Today, 7:21 AM", notes: "Full operations access" },
+  { userId: "usr_inactive_001", displayName: "Nina Walsh", email: "nina.walsh@jpm.com", company: "JP Morgan Private Markets", assignedRole: "asset_sponsor", status: "inactive", scopeLabel: "CleanEnergy Fund", lastActivity: "May 28, 2026", notes: "Temporarily inactive while sponsor contact is updated" },
 ];
 
 const workflowReviewChecks = [
@@ -698,6 +741,7 @@ const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ 
   { key: "households", label: "Contacts", icon: Users },
   { key: "execution", label: "Execution Flow", icon: CheckCircle2 },
   { key: "integrations", label: "Integrations", icon: Plug },
+  { key: "userAccess", label: "User Access", icon: Shield },
   { key: "activity", label: "Activity", icon: Activity },
   { key: "alerts", label: "Alerts", icon: AlertTriangle },
   { key: "settings", label: "Settings", icon: Settings },
@@ -3021,6 +3065,155 @@ function AlertsPage() {
   );
 }
 
+function roleLabel(role?: AccessRole) {
+  return role ? accessRoleLabels[role] : "No role";
+}
+
+function accessStatusTone(status: AccessStatus): StatusTone {
+  if (status === "active") return "green";
+  if (status === "pending") return "yellow";
+  if (status === "inactive") return "gray";
+  return "red";
+}
+
+function UserAccessPage({
+  users,
+  onUpdateUser,
+}: {
+  users: UserAccessRequest[];
+  onUpdateUser: (userId: string, patch: Partial<UserAccessRequest>) => void;
+}) {
+  const pending = users.filter((user) => user.status === "pending").length;
+  const active = users.filter((user) => user.status === "active").length;
+  const inactive = users.filter((user) => user.status === "inactive").length;
+  const removed = users.filter((user) => user.status === "role_removed").length;
+
+  function currentRole(user: UserAccessRequest): AccessRole {
+    return user.assignedRole ?? user.requestedRole ?? "client_signer";
+  }
+
+  function setDraftRole(user: UserAccessRequest, role: AccessRole) {
+    onUpdateUser(user.userId, user.status === "pending" ? { requestedRole: role } : { assignedRole: role });
+  }
+
+  function assignRole(user: UserAccessRequest) {
+    const role = currentRole(user);
+    onUpdateUser(user.userId, {
+      assignedRole: role,
+      requestedRole: undefined,
+      status: "active",
+      notes: `Access approved as ${accessRoleLabels[role]}`,
+    });
+  }
+
+  function inactivateRole(user: UserAccessRequest) {
+    onUpdateUser(user.userId, {
+      status: "inactive",
+      notes: "Role is inactive. User keeps a record but cannot operate in scoped views.",
+    });
+  }
+
+  function removeRole(user: UserAccessRequest) {
+    onUpdateUser(user.userId, {
+      assignedRole: undefined,
+      requestedRole: undefined,
+      status: "role_removed",
+      notes: "Role removed by Ops. User needs a new assignment before seeing restricted views.",
+    });
+  }
+
+  return (
+    <>
+      <PageTitle title="User Access" subtitle="Ops review for new users, role assignment, scoped access, and inactive roles" />
+
+      <div className="mb-5 grid grid-cols-4 gap-4">
+        <MetricCard label="Pending review" value={`${pending}`} delta="new users" />
+        <MetricCard label="Active roles" value={`${active}`} delta="approved" />
+        <MetricCard label="Inactive" value={`${inactive}`} delta="paused" />
+        <MetricCard label="Removed" value={`${removed}`} delta="no role" />
+      </div>
+
+      <ShellCard className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Role administration</h2>
+            <p className="mt-1 text-xs text-slate-500">New registered users stay pending until Ops assigns a role and scope.</p>
+          </div>
+          <StatusBadge value={`${pending} Pending`} tone={pending > 0 ? "yellow" : "green"} />
+        </div>
+
+        <TableHeader columns={["User", "Status", "Role", "Scope", "Activity", "Actions"]} />
+        {users.map((user) => {
+          const role = currentRole(user);
+          const canAssign = user.status !== "active";
+          const canInactivate = user.status === "active";
+          const canRemove = user.status !== "role_removed";
+
+          return (
+            <div key={user.userId} className="grid grid-cols-[1.35fr_0.55fr_0.9fr_1fr_0.7fr_1.2fr] items-center gap-3 border-t border-slate-800/80 px-5 py-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900">
+                    <User className="h-3.5 w-3.5 text-sky-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-100">{user.displayName}</p>
+                    <p className="truncate text-[11px] text-slate-500">{user.email}</p>
+                  </div>
+                </div>
+                <p className="mt-2 truncate text-[11px] text-slate-500">{user.company}</p>
+              </div>
+
+              <StatusBadge value={user.status.replace("_", " ")} tone={accessStatusTone(user.status)} />
+
+              <div>
+                <select
+                  value={role}
+                  onChange={(event) => setDraftRole(user, event.target.value as AccessRole)}
+                  className="h-8 w-full rounded-md border border-slate-700 bg-[#0b0d11] px-2 text-xs font-semibold text-slate-100 outline-none focus:border-sky-400/70"
+                >
+                  {Object.entries(accessRoleLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] text-slate-500">{roleLabel(user.assignedRole ?? user.requestedRole)}</p>
+              </div>
+
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-slate-200">{user.scopeLabel}</p>
+                <p className="mt-1 truncate text-[10px] text-slate-500">{accessRoleScopeHints[role]}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-300">{user.lastActivity}</p>
+                <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">{user.notes}</p>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                {canAssign && (
+                  <button onClick={() => assignRole(user)} className="flex h-7 items-center gap-1.5 rounded-md bg-sky-500 px-2.5 text-[11px] font-semibold text-white hover:bg-sky-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />Assign
+                  </button>
+                )}
+                {canInactivate && (
+                  <button onClick={() => inactivateRole(user)} className="flex h-7 items-center gap-1.5 rounded-md border border-slate-700 px-2.5 text-[11px] font-semibold text-slate-300 hover:border-amber-300/40 hover:text-amber-200">
+                    <Clock3 className="h-3.5 w-3.5" />Inactive
+                  </button>
+                )}
+                {canRemove && (
+                  <button onClick={() => removeRole(user)} className="flex h-7 items-center gap-1.5 rounded-md border border-rose-400/25 px-2.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-400/10">
+                    <X className="h-3.5 w-3.5" />Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </ShellCard>
+    </>
+  );
+}
+
 function SettingsPage() {
   const settings = [
     ["Users and Roles", "Trader, Operations, Admin, Compliance", Users],
@@ -3954,6 +4147,7 @@ export default function PatsPlatform() {
   const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
   const [localDocs, setLocalDocs] = useState<TradeDoc[]>(() => mergeDocumentSeeds(loadLocal("pats_docs", tradeDocuments)));
   const [localWorkflows, setLocalWorkflows] = useState<WorkflowRecord[]>(() => loadLocal("pats_workflows", workflows));
+  const [localUserAccess, setLocalUserAccess] = useState<UserAccessRequest[]>(() => loadLocal("pats_user_access", userAccessSeeds));
 
   const addTrade = (t: Trade) => { const n = [t, ...localTrades]; setLocalTrades(n); saveLocal("pats_trades", n); };
   const updateBroker = (id: string, p: Partial<Broker>) => { const n = localBrokers.map(b => b.patsBrokerProfileId === id ? { ...b, ...p } : b); setLocalBrokers(n); saveLocal("pats_brokers", n); };
@@ -3962,6 +4156,7 @@ export default function PatsPlatform() {
   const updateDoc = (id: string, p: Partial<TradeDoc>) => { const n = localDocs.map(d => d.tradeDocumentId === id ? { ...d, ...p } : d); setLocalDocs(n); saveLocal("pats_docs", n); };
   const addWorkflow = (w: WorkflowRecord) => { const n = [...localWorkflows, w]; setLocalWorkflows(n); saveLocal("pats_workflows", n); };
   const updateWorkflow = (id: string, p: Partial<WorkflowRecord>) => { const n = localWorkflows.map(w => w.id === id ? { ...w, ...p } : w); setLocalWorkflows(n); saveLocal("pats_workflows", n); };
+  const updateUserAccess = (id: string, p: Partial<UserAccessRequest>) => { const n = localUserAccess.map(u => u.userId === id ? { ...u, ...p } : u); setLocalUserAccess(n); saveLocal("pats_user_access", n); };
 
   return (
     <div className="min-h-screen bg-[#080a0d] font-sans text-slate-100 [font-feature-settings:'tnum']">
@@ -3980,6 +4175,7 @@ export default function PatsPlatform() {
           {active === "households" && <Households />}
           {active === "execution" && <Execution />}
           {active === "integrations" && <Integrations />}
+          {active === "userAccess" && <UserAccessPage users={localUserAccess} onUpdateUser={updateUserAccess} />}
           {active === "activity" && <ActivityLog />}
           {active === "alerts" && <AlertsPage />}
           {active === "settings" && <SettingsPage />}
