@@ -1644,7 +1644,7 @@ function PrivateAssets({
     <>
       <PageTitle
         title="Private Assets"
-        subtitle="Create the asset record first, then map and resolve the ticker within its Vantage broker scope"
+        subtitle="Manage private investments and the broker tickers used to identify them in incoming trades"
         action={
           <div className="flex items-center gap-2">
             <button onClick={() => setAssetPanel("resolution")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-700 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 transition hover:border-sky-500/50 hover:text-sky-300">
@@ -1790,7 +1790,7 @@ const privateAssetClassOptions: Array<{ value: Asset["assetClass"]; label: strin
 
 function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { brokers: Broker[]; onAdd: (asset: Asset) => void; onClose: () => void }) {
   const activeBrokers = brokerOptions.filter((broker) => broker.status === "Active");
-  const [brokerId, setBrokerId] = useState(activeBrokers[0]?.patsBrokerProfileId ?? "");
+  const [brokerName, setBrokerName] = useState(activeBrokers[0]?.name ?? "");
   const [name, setName] = useState("");
   const [assetClass, setAssetClass] = useState<Asset["assetClass"]>("private_equity");
   const [preceptAssetClass, setPreceptAssetClass] = useState("equity_alternatives");
@@ -1807,7 +1807,7 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
   const [units, setUnits] = useState("");
 
   const handleCreate = () => {
-    const broker = brokerOptions.find((item) => item.patsBrokerProfileId === brokerId);
+    const broker = brokerOptions.find((item) => item.name === brokerName);
     if (!broker || !name.trim()) return;
     const assetClassLabel = privateAssetClassOptions.find((item) => item.value === assetClass)?.label ?? displayLabel(assetClass);
     onAdd({
@@ -1844,17 +1844,14 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
   return (
     <DetailPanel title="New Private Asset" subtitle="Step 1 of 2 - create the broker-owned asset record" onClose={onClose}>
       <div className="space-y-4">
-        <div className="rounded-md border border-sky-400/20 bg-sky-400/10 p-3 text-xs text-sky-200">
-          The backend creates the asset as active. A ticker is mapped separately after this record exists.
-        </div>
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Ownership and classification</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="col-span-2"><FormField label="PATS broker profile"><select className={compactInputClass} value={brokerId} onChange={(event) => setBrokerId(event.target.value)}>{activeBrokers.map((broker) => <option key={broker.patsBrokerProfileId} value={broker.patsBrokerProfileId}>{broker.name} ({broker.code})</option>)}</select></FormField></div>
+            <div className="col-span-2"><FormField label="Broker"><select className={compactInputClass} value={brokerName} onChange={(event) => setBrokerName(event.target.value)}>{activeBrokers.map((broker) => <option key={broker.patsBrokerProfileId} value={broker.name}>{broker.name}</option>)}</select></FormField></div>
             <div className="col-span-2"><FormField label="Asset name"><input className={compactInputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="Northstar Growth Fund III" /></FormField></div>
             <FormField label="Private asset class"><select className={compactInputClass} value={assetClass} onChange={(event) => setAssetClass(event.target.value as Asset["assetClass"])}>{privateAssetClassOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FormField>
             <FormField label="Precept asset class"><select className={compactInputClass} value={preceptAssetClass} onChange={(event) => setPreceptAssetClass(event.target.value)}><option value="equity_alternatives">Equity Alternatives</option><option value="fixed_income_alternatives">Fixed Income Alternatives</option><option value="real_assets">Real Assets</option><option value="structured_products">Structured Products</option></select></FormField>
-            <div className="col-span-2"><FormField label="Precept style"><input className={compactInputClass} value={preceptStyle} onChange={(event) => setPreceptStyle(event.target.value)} placeholder="late_stage_venture_growth_equity" /></FormField></div>
+            <div className="col-span-2"><FormField label="Investment style"><select className={compactInputClass} value={preceptStyle} onChange={(event) => setPreceptStyle(event.target.value)}><option value="late_stage_venture_growth_equity">Late Stage Venture / Growth Equity</option><option value="lower_middle_market_private_credit">Lower Middle Market Private Credit</option><option value="upper_middle_market_private_credit">Upper Middle Market Private Credit</option><option value="upper_middle_market_private_equity">Upper Middle Market Private Equity</option><option value="real_estate_private_credit">Real Estate Private Credit</option><option value="infrastructure_funds">Infrastructure Funds</option><option value="hedge_funds">Hedge Funds</option><option value="multi_asset">Multi Asset</option></select></FormField></div>
           </div>
         </ShellCard>
         <ShellCard className="p-4">
@@ -1877,7 +1874,7 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
             <FormField label="Units"><input className={compactInputClass} value={units} onChange={(event) => setUnits(event.target.value)} placeholder="48,000" /></FormField>
           </div>
         </ShellCard>
-        <div className="grid grid-cols-2 gap-3"><button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button><button onClick={handleCreate} disabled={!brokerId || !name.trim()} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Create asset</button></div>
+        <div className="grid grid-cols-2 gap-3"><button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button><button onClick={handleCreate} disabled={!brokerName || !name.trim()} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Create asset</button></div>
       </div>
     </DetailPanel>
   );
@@ -1886,56 +1883,55 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
 function TickerResolutionPanel({ assets: assetOptions, brokers: brokerOptions, canCreateMapping, onMapTicker, onClose }: { assets: Asset[]; brokers: Broker[]; canCreateMapping: boolean; onMapTicker: (assetId: string, ticker: string) => void; onClose: () => void }) {
   const activeBrokers = brokerOptions.filter((broker) => broker.status === "Active");
   const [mode, setMode] = useState<"resolve" | "map">("resolve");
-  const [brokerId, setBrokerId] = useState(activeBrokers[0]?.patsBrokerProfileId ?? "");
+  const [brokerName, setBrokerName] = useState(activeBrokers[0]?.name ?? "");
   const [ticker, setTicker] = useState("");
-  const [assetId, setAssetId] = useState("");
+  const [assetName, setAssetName] = useState("");
   const [hasResolved, setHasResolved] = useState(false);
   const [mappingError, setMappingError] = useState("");
-  const broker = brokerOptions.find((item) => item.patsBrokerProfileId === brokerId);
-  const brokerAssets = assetOptions.filter((asset) => asset.patsBrokerProfileId === brokerId);
+  const brokerAssets = assetOptions.filter((asset) => asset.broker === brokerName);
   const resolvedAsset = hasResolved ? brokerAssets.find((asset) => asset.ticker === ticker.trim().toUpperCase() && asset.status === "active") : undefined;
 
-  const switchMode = (nextMode: "resolve" | "map") => { setMode(nextMode); setTicker(""); setAssetId(""); setHasResolved(false); setMappingError(""); };
+  const switchMode = (nextMode: "resolve" | "map") => { setMode(nextMode); setTicker(""); setAssetName(""); setHasResolved(false); setMappingError(""); };
   const createMapping = () => {
-    if (!assetId || !ticker.trim()) return;
+    const selectedAsset = brokerAssets.find((asset) => asset.name === assetName);
+    if (!selectedAsset || !ticker.trim()) return;
     const normalizedTicker = ticker.trim().toUpperCase();
-    const existingTicker = brokerAssets.find((asset) => asset.ticker === normalizedTicker && asset.privateAssetId !== assetId);
+    const existingTicker = brokerAssets.find((asset) => asset.ticker === normalizedTicker && asset.privateAssetId !== selectedAsset.privateAssetId);
     if (existingTicker) {
       setMappingError(`${normalizedTicker} already resolves to ${existingTicker.name} for this broker.`);
       setHasResolved(false);
       return;
     }
     setMappingError("");
-    onMapTicker(assetId, normalizedTicker);
+    onMapTicker(selectedAsset.privateAssetId, normalizedTicker);
     setHasResolved(true);
   };
 
   return (
-    <DetailPanel title="Ticker Resolution" subtitle="Resolve exactly as PATS does: Vantage broker ID + normalized ticker" onClose={onClose}>
+    <DetailPanel title="Ticker Resolution" subtitle="Find which private asset a broker ticker represents" onClose={onClose}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 rounded-md border border-slate-800 bg-slate-950/50 p-1">
           <button onClick={() => switchMode("resolve")} className={`h-8 rounded text-xs font-semibold ${mode === "resolve" ? "bg-sky-500 text-white" : "text-slate-400"}`}>Test resolution</button>
           <button onClick={() => canCreateMapping && switchMode("map")} disabled={!canCreateMapping} className={`h-8 rounded text-xs font-semibold ${mode === "map" ? "bg-sky-500 text-white" : "text-slate-400 disabled:cursor-not-allowed disabled:opacity-40"}`}>Create mapping</button>
         </div>
         <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 text-xs text-slate-400">
-          {mode === "resolve" ? "This simulates GET /ticker-resolution?brokerId=<vantageBrokerId>&ticker=<ticker>." : "This simulates POST /brokers/{patsBrokerProfileId}/tickers. The selected asset must belong to the same active broker."}
+          {mode === "resolve" ? "Choose the broker and enter the ticker received with the trade." : "Choose an active asset owned by this broker and assign the ticker it uses."}
         </div>
         <ShellCard className="p-4">
           <div className="space-y-3">
-            <FormField label="Broker scope"><select className={compactInputClass} value={brokerId} onChange={(event) => { setBrokerId(event.target.value); setAssetId(""); setHasResolved(false); setMappingError(""); }}>{activeBrokers.map((item) => <option key={item.patsBrokerProfileId} value={item.patsBrokerProfileId}>{item.name}</option>)}</select></FormField>
-            <div className="grid grid-cols-2 gap-3"><Info label="PATS broker profile" value={broker?.patsBrokerProfileId ?? "-"} /><Info label="Vantage broker ID" value={broker?.vantageBrokerId ?? "-"} /></div>
-            {mode === "map" && <FormField label="Private asset"><select className={compactInputClass} value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="">Select an asset owned by this broker</option>{brokerAssets.filter((asset) => asset.status === "active").map((asset) => <option key={asset.privateAssetId} value={asset.privateAssetId}>{asset.name}{asset.ticker ? ` (${asset.ticker})` : " - not mapped"}</option>)}</select></FormField>}
-            <FormField label="Broker ticker"><input className={compactInputClass} value={ticker} onChange={(event) => { setTicker(event.target.value.toUpperCase()); setHasResolved(false); setMappingError(""); }} placeholder="NORTHSTAR-III" maxLength={32} /></FormField>
+            <FormField label="Broker"><select className={compactInputClass} value={brokerName} onChange={(event) => { setBrokerName(event.target.value); setAssetName(""); setHasResolved(false); setMappingError(""); }}>{activeBrokers.map((item) => <option key={item.patsBrokerProfileId} value={item.name}>{item.name}</option>)}</select></FormField>
+            {mode === "map" && <FormField label="Private asset"><select className={compactInputClass} value={assetName} onChange={(event) => setAssetName(event.target.value)}><option value="">Select an asset owned by this broker</option>{brokerAssets.filter((asset) => asset.status === "active").map((asset) => <option key={asset.privateAssetId} value={asset.name}>{asset.name}{asset.ticker ? ` (${asset.ticker})` : " - not mapped"}</option>)}</select></FormField>}
+            <FormField label="Ticker"><input className={compactInputClass} value={ticker} onChange={(event) => { setTicker(event.target.value.toUpperCase()); setHasResolved(false); setMappingError(""); }} placeholder="NORTHSTAR-III" maxLength={32} /></FormField>
           </div>
         </ShellCard>
         {mode === "resolve" ? (
-          <button onClick={() => setHasResolved(true)} disabled={!brokerId || !ticker.trim()} className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Resolve ticker</button>
+          <button onClick={() => setHasResolved(true)} disabled={!brokerName || !ticker.trim()} className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Resolve ticker</button>
         ) : (
-          <button onClick={createMapping} disabled={!assetId || !ticker.trim()} className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Create broker-scoped ticker</button>
+          <button onClick={createMapping} disabled={!assetName || !ticker.trim()} className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Save ticker mapping</button>
         )}
         {hasResolved && mode === "resolve" && (
-          resolvedAsset ? <ShellCard className="border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-emerald-300">Resolved successfully</p><h3 className="mt-1 text-base font-semibold text-white">{resolvedAsset.name}</h3></div><StatusBadge value="active" tone="green" /></div><div className="mt-4 grid grid-cols-2 gap-4"><Info label="Private asset ID" value={resolvedAsset.privateAssetId} /><Info label="Broker-scoped ticker ID" value={resolvedAsset.brokerScopedTickerId} /><Info label="Normalized ticker" value={resolvedAsset.ticker} /><Info label="Broker" value={resolvedAsset.broker} /></div></ShellCard>
-          : <div className="rounded-md border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-semibold text-rose-300">Ticker was not found for this broker</p><p className="mt-1 text-xs text-slate-400">PATS would return a 404. Check the broker scope, ticker spelling, mapping status, and asset status.</p></div>
+          resolvedAsset ? <ShellCard className="border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-emerald-300">Match found</p><h3 className="mt-1 text-base font-semibold text-white">{resolvedAsset.name}</h3></div><StatusBadge value="active" tone="green" /></div><div className="mt-4 grid grid-cols-2 gap-4"><Info label="Ticker" value={resolvedAsset.ticker} /><Info label="Broker" value={resolvedAsset.broker} /><Info label="Asset class" value={resolvedAsset.className} /><Info label="Sponsor" value={resolvedAsset.gpSponsor} /></div></ShellCard>
+          : <div className="rounded-md border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-semibold text-rose-300">No matching asset found</p><p className="mt-1 text-xs text-slate-400">Check the selected broker and ticker, or create a ticker mapping first.</p></div>
         )}
         {hasResolved && mode === "map" && <div className="rounded-md border border-emerald-400/20 bg-emerald-400/10 p-4 text-xs text-emerald-300">Mapping created in mock data. Switch to Test resolution to verify the same broker and ticker.</div>}
         {mappingError && <div className="rounded-md border border-rose-400/20 bg-rose-400/10 p-4 text-xs text-rose-300">{mappingError}</div>}
