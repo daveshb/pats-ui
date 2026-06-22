@@ -1612,14 +1612,28 @@ function Info({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[8px] font-semibold text-slate-600">{label}</p><p className="mt-1 text-[13px] font-semibold text-slate-100">{value}</p></div>;
 }
 
-function PrivateAssets() {
+function PrivateAssets({
+  localAssets,
+  localBrokers,
+  role,
+  onAddAsset,
+  onMapTicker,
+}: {
+  localAssets: Asset[];
+  localBrokers: Broker[];
+  role: AccessRole;
+  onAddAsset: (asset: Asset) => void;
+  onMapTicker: (assetId: string, ticker: string) => void;
+}) {
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [brokerFilter, setBrokerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [assetPanel, setAssetPanel] = useState<"create" | "resolution" | null>(null);
+  const canManageAssets = rolePermissions[role].canManageBrokers;
 
-  const uniqueBrokers = Array.from(new Set(assets.map(a => a.broker)));
-  const filteredAssets = assets.filter(a => {
+  const uniqueBrokers = Array.from(new Set(localAssets.map(a => a.broker)));
+  const filteredAssets = localAssets.filter(a => {
     if (brokerFilter !== "all" && a.broker !== brokerFilter) return false;
     if (statusFilter !== "all" && a.status !== statusFilter) return false;
     return true;
@@ -1628,7 +1642,23 @@ function PrivateAssets() {
 
   return (
     <>
-      <PageTitle title="Private Assets" subtitle="Investment products owned by brokers, with their tickers, terms, documents, and workflow rules" />
+      <PageTitle
+        title="Private Assets"
+        subtitle="Create the asset record first, then map and resolve the ticker within its Vantage broker scope"
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setAssetPanel("resolution")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-700 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 transition hover:border-sky-500/50 hover:text-sky-300">
+              <Route className="h-3.5 w-3.5" />Ticker resolution
+            </button>
+            {canManageAssets && (
+              <button onClick={() => setAssetPanel("create")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30">
+                <Plus className="h-3.5 w-3.5" />New private asset
+              </button>
+            )}
+          </div>
+        }
+      />
+      {!canManageAssets && <ReadOnlyNotice label="Asset creation and ticker mapping are reserved for PATS Ops. You can still test ticker resolution for brokers in your scope." />}
       <Toolbar placeholder="Search asset, broker, ticker, sponsor, document platform, or workflow rule...">
         <button onClick={() => setShowFilters(v => !v)} className={`flex h-9 items-center gap-2 rounded-md border px-3.5 text-xs font-semibold transition ${showFilters ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-200"}`}>
           <Filter className="h-3.5 w-3.5" />Filters
@@ -1657,15 +1687,16 @@ function PrivateAssets() {
         </div>
         <div className="divide-y divide-slate-800/90">
           {filteredAssets.map((asset) => {
-            const isOpen = expandedAsset === asset.ticker;
+            const isOpen = expandedAsset === asset.privateAssetId;
             const workflow = workflows.find((flow) => flow.privateAssetId === asset.privateAssetId);
             const workflowLabel = workflow ? displayLabel(workflow.policy) : "No workflow";
-            const canTrade = asset.status === "active" && workflow;
+            const hasTickerMapping = Boolean(asset.ticker && asset.brokerScopedTickerId);
+            const canTrade = asset.status === "active" && hasTickerMapping && workflow;
 
             return (
-              <div key={asset.ticker}>
+              <div key={asset.privateAssetId}>
                 <button
-                  onClick={() => setExpandedAsset(isOpen ? null : asset.ticker)}
+                  onClick={() => setExpandedAsset(isOpen ? null : asset.privateAssetId)}
                   className="grid w-full grid-cols-[1.45fr_1.05fr_0.65fr_0.7fr_1fr_0.9fr_1.1fr_0.35fr] items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65"
                 >
                   <span>
@@ -1673,7 +1704,7 @@ function PrivateAssets() {
                     <span className="mt-0.5 block text-[11px] text-slate-500">{asset.className} - {asset.gpSponsor}</span>
                   </span>
                   <span className="text-xs text-slate-400">{asset.broker}</span>
-                  <span className="text-sm font-semibold text-sky-300">{asset.ticker}</span>
+                  <span className={`text-sm font-semibold ${hasTickerMapping ? "text-sky-300" : "text-slate-600"}`}>{asset.ticker || "Not mapped"}</span>
                   <span><StatusBadge value={asset.status} tone={asset.status === "active" ? "green" : asset.status === "restricted" ? "yellow" : "red"} /></span>
                   <span className="text-xs text-slate-400">{asset.liquidityTerms}</span>
                   <span className="text-xs text-slate-400">{asset.documentExecutionPlatform}</span>
@@ -1687,7 +1718,7 @@ function PrivateAssets() {
                         <p className="text-xs font-semibold text-slate-300">Broker setup</p>
                         <div className="mt-3 grid grid-cols-2 gap-4">
                           <Info label="Broker" value={asset.broker} />
-                          <Info label="Ticker" value={asset.ticker} />
+                          <Info label="Ticker" value={asset.ticker || "Not mapped"} />
                           <Info label="Status" value={displayLabel(asset.status)} />
                           <Info label="Sponsor" value={asset.gpSponsor} />
                         </div>
@@ -1709,7 +1740,7 @@ function PrivateAssets() {
                           {[
                             ["Broker enabled", true],
                             ["Asset active", asset.status === "active"],
-                            ["Ticker mapped", true],
+                            ["Ticker mapped", hasTickerMapping],
                             ["Workflow set", Boolean(workflow)],
                             ["Documents defined", Boolean(workflow)],
                             ["Ready to trade", Boolean(canTrade)],
@@ -1732,7 +1763,184 @@ function PrivateAssets() {
           {filteredAssets.length === 0 && <p className="px-5 py-6 text-xs text-slate-500">No assets match the current filters.</p>}
         </div>
       </ShellCard>
+      {assetPanel === "create" && canManageAssets && (
+        <CreatePrivateAssetPanel brokers={localBrokers} onAdd={onAddAsset} onClose={() => setAssetPanel(null)} />
+      )}
+      {assetPanel === "resolution" && (
+        <TickerResolutionPanel
+          assets={localAssets}
+          brokers={localBrokers}
+          canCreateMapping={canManageAssets}
+          onMapTicker={onMapTicker}
+          onClose={() => setAssetPanel(null)}
+        />
+      )}
     </>
+  );
+}
+
+const privateAssetClassOptions: Array<{ value: Asset["assetClass"]; label: string }> = [
+  { value: "private_equity", label: "Private Equity" },
+  { value: "private_credit", label: "Private Credit" },
+  { value: "venture_capital", label: "Venture Capital" },
+  { value: "hedge_fund", label: "Hedge Fund" },
+  { value: "real_assets", label: "Real Assets" },
+  { value: "other", label: "Other" },
+];
+
+function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { brokers: Broker[]; onAdd: (asset: Asset) => void; onClose: () => void }) {
+  const activeBrokers = brokerOptions.filter((broker) => broker.status === "Active");
+  const [brokerId, setBrokerId] = useState(activeBrokers[0]?.patsBrokerProfileId ?? "");
+  const [name, setName] = useState("");
+  const [assetClass, setAssetClass] = useState<Asset["assetClass"]>("private_equity");
+  const [preceptAssetClass, setPreceptAssetClass] = useState("equity_alternatives");
+  const [preceptStyle, setPreceptStyle] = useState("late_stage_venture_growth_equity");
+  const [fundStructure, setFundStructure] = useState("");
+  const [gpSponsor, setGpSponsor] = useState("");
+  const [liquidityTerms, setLiquidityTerms] = useState("");
+  const [lockupPeriod, setLockupPeriod] = useState("");
+  const [noticePeriod, setNoticePeriod] = useState("");
+  const [taxDocumentSource, setTaxDocumentSource] = useState("");
+  const [documentExecutionPlatform, setDocumentExecutionPlatform] = useState("");
+  const [value, setValue] = useState("");
+  const [supply, setSupply] = useState("");
+  const [units, setUnits] = useState("");
+
+  const handleCreate = () => {
+    const broker = brokerOptions.find((item) => item.patsBrokerProfileId === brokerId);
+    if (!broker || !name.trim()) return;
+    const assetClassLabel = privateAssetClassOptions.find((item) => item.value === assetClass)?.label ?? displayLabel(assetClass);
+    onAdd({
+      privateAssetId: `pa_mock_${Date.now().toString(36)}`,
+      patsBrokerProfileId: broker.patsBrokerProfileId,
+      brokerScopedTickerId: "",
+      ticker: "",
+      name: name.trim(),
+      broker: broker.name,
+      assetClass,
+      preceptAssetClass,
+      preceptStyle,
+      fundStructure,
+      gpSponsor,
+      liquidityTerms,
+      lockupPeriod,
+      noticePeriod,
+      taxDocumentSource,
+      documentExecutionPlatform,
+      status: "active",
+      className: assetClassLabel,
+      structure: fundStructure || "Not specified",
+      sponsor: gpSponsor || "Not specified",
+      value: value || "$0",
+      liquidity: "Low",
+      lockup: lockupPeriod || "Not specified",
+      notice: noticePeriod || "Not specified",
+      supply: supply || "$0",
+      units: units || "0",
+    });
+    onClose();
+  };
+
+  return (
+    <DetailPanel title="New Private Asset" subtitle="Step 1 of 2 - create the broker-owned asset record" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="rounded-md border border-sky-400/20 bg-sky-400/10 p-3 text-xs text-sky-200">
+          The backend creates the asset as active. A ticker is mapped separately after this record exists.
+        </div>
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Ownership and classification</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="col-span-2"><FormField label="PATS broker profile"><select className={compactInputClass} value={brokerId} onChange={(event) => setBrokerId(event.target.value)}>{activeBrokers.map((broker) => <option key={broker.patsBrokerProfileId} value={broker.patsBrokerProfileId}>{broker.name} ({broker.code})</option>)}</select></FormField></div>
+            <div className="col-span-2"><FormField label="Asset name"><input className={compactInputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="Northstar Growth Fund III" /></FormField></div>
+            <FormField label="Private asset class"><select className={compactInputClass} value={assetClass} onChange={(event) => setAssetClass(event.target.value as Asset["assetClass"])}>{privateAssetClassOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FormField>
+            <FormField label="Precept asset class"><select className={compactInputClass} value={preceptAssetClass} onChange={(event) => setPreceptAssetClass(event.target.value)}><option value="equity_alternatives">Equity Alternatives</option><option value="fixed_income_alternatives">Fixed Income Alternatives</option><option value="real_assets">Real Assets</option><option value="structured_products">Structured Products</option></select></FormField>
+            <div className="col-span-2"><FormField label="Precept style"><input className={compactInputClass} value={preceptStyle} onChange={(event) => setPreceptStyle(event.target.value)} placeholder="late_stage_venture_growth_equity" /></FormField></div>
+          </div>
+        </ShellCard>
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Terms and operations</h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <FormField label="Fund structure"><input className={compactInputClass} value={fundStructure} onChange={(event) => setFundStructure(event.target.value)} placeholder="3(c)(7), feeder, drawdown" /></FormField>
+            <FormField label="GP / Sponsor"><input className={compactInputClass} value={gpSponsor} onChange={(event) => setGpSponsor(event.target.value)} placeholder="Northstar Capital" /></FormField>
+            <div className="col-span-2"><FormField label="Liquidity terms"><input className={compactInputClass} value={liquidityTerms} onChange={(event) => setLiquidityTerms(event.target.value)} placeholder="Quarterly windows" /></FormField></div>
+            <FormField label="Lock-up period"><input className={compactInputClass} value={lockupPeriod} onChange={(event) => setLockupPeriod(event.target.value)} placeholder="24 months" /></FormField>
+            <FormField label="Notice period"><input className={compactInputClass} value={noticePeriod} onChange={(event) => setNoticePeriod(event.target.value)} placeholder="90 days" /></FormField>
+            <FormField label="Tax document source"><input className={compactInputClass} value={taxDocumentSource} onChange={(event) => setTaxDocumentSource(event.target.value)} placeholder="UMB" /></FormField>
+            <FormField label="Document platform"><input className={compactInputClass} value={documentExecutionPlatform} onChange={(event) => setDocumentExecutionPlatform(event.target.value)} placeholder="DocuSign" /></FormField>
+          </div>
+        </ShellCard>
+        <ShellCard className="p-4">
+          <h3 className="text-sm font-semibold text-white">Position metadata</h3>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <FormField label="Value"><input className={compactInputClass} value={value} onChange={(event) => setValue(event.target.value)} placeholder="$2.4M" /></FormField>
+            <FormField label="Supply"><input className={compactInputClass} value={supply} onChange={(event) => setSupply(event.target.value)} placeholder="$12M" /></FormField>
+            <FormField label="Units"><input className={compactInputClass} value={units} onChange={(event) => setUnits(event.target.value)} placeholder="48,000" /></FormField>
+          </div>
+        </ShellCard>
+        <div className="grid grid-cols-2 gap-3"><button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button><button onClick={handleCreate} disabled={!brokerId || !name.trim()} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Create asset</button></div>
+      </div>
+    </DetailPanel>
+  );
+}
+
+function TickerResolutionPanel({ assets: assetOptions, brokers: brokerOptions, canCreateMapping, onMapTicker, onClose }: { assets: Asset[]; brokers: Broker[]; canCreateMapping: boolean; onMapTicker: (assetId: string, ticker: string) => void; onClose: () => void }) {
+  const activeBrokers = brokerOptions.filter((broker) => broker.status === "Active");
+  const [mode, setMode] = useState<"resolve" | "map">("resolve");
+  const [brokerId, setBrokerId] = useState(activeBrokers[0]?.patsBrokerProfileId ?? "");
+  const [ticker, setTicker] = useState("");
+  const [assetId, setAssetId] = useState("");
+  const [hasResolved, setHasResolved] = useState(false);
+  const [mappingError, setMappingError] = useState("");
+  const broker = brokerOptions.find((item) => item.patsBrokerProfileId === brokerId);
+  const brokerAssets = assetOptions.filter((asset) => asset.patsBrokerProfileId === brokerId);
+  const resolvedAsset = hasResolved ? brokerAssets.find((asset) => asset.ticker === ticker.trim().toUpperCase() && asset.status === "active") : undefined;
+
+  const switchMode = (nextMode: "resolve" | "map") => { setMode(nextMode); setTicker(""); setAssetId(""); setHasResolved(false); setMappingError(""); };
+  const createMapping = () => {
+    if (!assetId || !ticker.trim()) return;
+    const normalizedTicker = ticker.trim().toUpperCase();
+    const existingTicker = brokerAssets.find((asset) => asset.ticker === normalizedTicker && asset.privateAssetId !== assetId);
+    if (existingTicker) {
+      setMappingError(`${normalizedTicker} already resolves to ${existingTicker.name} for this broker.`);
+      setHasResolved(false);
+      return;
+    }
+    setMappingError("");
+    onMapTicker(assetId, normalizedTicker);
+    setHasResolved(true);
+  };
+
+  return (
+    <DetailPanel title="Ticker Resolution" subtitle="Resolve exactly as PATS does: Vantage broker ID + normalized ticker" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 rounded-md border border-slate-800 bg-slate-950/50 p-1">
+          <button onClick={() => switchMode("resolve")} className={`h-8 rounded text-xs font-semibold ${mode === "resolve" ? "bg-sky-500 text-white" : "text-slate-400"}`}>Test resolution</button>
+          <button onClick={() => canCreateMapping && switchMode("map")} disabled={!canCreateMapping} className={`h-8 rounded text-xs font-semibold ${mode === "map" ? "bg-sky-500 text-white" : "text-slate-400 disabled:cursor-not-allowed disabled:opacity-40"}`}>Create mapping</button>
+        </div>
+        <div className="rounded-md border border-slate-800 bg-[#0c1117] p-3 text-xs text-slate-400">
+          {mode === "resolve" ? "This simulates GET /ticker-resolution?brokerId=<vantageBrokerId>&ticker=<ticker>." : "This simulates POST /brokers/{patsBrokerProfileId}/tickers. The selected asset must belong to the same active broker."}
+        </div>
+        <ShellCard className="p-4">
+          <div className="space-y-3">
+            <FormField label="Broker scope"><select className={compactInputClass} value={brokerId} onChange={(event) => { setBrokerId(event.target.value); setAssetId(""); setHasResolved(false); setMappingError(""); }}>{activeBrokers.map((item) => <option key={item.patsBrokerProfileId} value={item.patsBrokerProfileId}>{item.name}</option>)}</select></FormField>
+            <div className="grid grid-cols-2 gap-3"><Info label="PATS broker profile" value={broker?.patsBrokerProfileId ?? "-"} /><Info label="Vantage broker ID" value={broker?.vantageBrokerId ?? "-"} /></div>
+            {mode === "map" && <FormField label="Private asset"><select className={compactInputClass} value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="">Select an asset owned by this broker</option>{brokerAssets.filter((asset) => asset.status === "active").map((asset) => <option key={asset.privateAssetId} value={asset.privateAssetId}>{asset.name}{asset.ticker ? ` (${asset.ticker})` : " - not mapped"}</option>)}</select></FormField>}
+            <FormField label="Broker ticker"><input className={compactInputClass} value={ticker} onChange={(event) => { setTicker(event.target.value.toUpperCase()); setHasResolved(false); setMappingError(""); }} placeholder="NORTHSTAR-III" maxLength={32} /></FormField>
+          </div>
+        </ShellCard>
+        {mode === "resolve" ? (
+          <button onClick={() => setHasResolved(true)} disabled={!brokerId || !ticker.trim()} className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Resolve ticker</button>
+        ) : (
+          <button onClick={createMapping} disabled={!assetId || !ticker.trim()} className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Create broker-scoped ticker</button>
+        )}
+        {hasResolved && mode === "resolve" && (
+          resolvedAsset ? <ShellCard className="border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-emerald-300">Resolved successfully</p><h3 className="mt-1 text-base font-semibold text-white">{resolvedAsset.name}</h3></div><StatusBadge value="active" tone="green" /></div><div className="mt-4 grid grid-cols-2 gap-4"><Info label="Private asset ID" value={resolvedAsset.privateAssetId} /><Info label="Broker-scoped ticker ID" value={resolvedAsset.brokerScopedTickerId} /><Info label="Normalized ticker" value={resolvedAsset.ticker} /><Info label="Broker" value={resolvedAsset.broker} /></div></ShellCard>
+          : <div className="rounded-md border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-semibold text-rose-300">Ticker was not found for this broker</p><p className="mt-1 text-xs text-slate-400">PATS would return a 404. Check the broker scope, ticker spelling, mapping status, and asset status.</p></div>
+        )}
+        {hasResolved && mode === "map" && <div className="rounded-md border border-emerald-400/20 bg-emerald-400/10 p-4 text-xs text-emerald-300">Mapping created in mock data. Switch to Test resolution to verify the same broker and ticker.</div>}
+        {mappingError && <div className="rounded-md border border-rose-400/20 bg-rose-400/10 p-4 text-xs text-rose-300">{mappingError}</div>}
+      </div>
+    </DetailPanel>
   );
 }
 
@@ -4620,6 +4828,7 @@ export default function PatsPlatform() {
 
   const [localTrades, setLocalTrades] = useState<Trade[]>(() => loadLocal("pats_trades", trades));
   const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
+  const [localAssets, setLocalAssets] = useState<Asset[]>(() => loadLocal("pats_private_assets", assets));
   const [localDocs, setLocalDocs] = useState<TradeDoc[]>(() => mergeDocumentSeeds(loadLocal("pats_docs", tradeDocuments)));
   const [localWorkflows, setLocalWorkflows] = useState<WorkflowRecord[]>(() => loadLocal("pats_workflows", workflows));
   const [localUserAccess, setLocalUserAccess] = useState<UserAccessRequest[]>(() => loadLocal("pats_user_access", userAccessSeeds));
@@ -4627,6 +4836,17 @@ export default function PatsPlatform() {
   const addTrade = (t: Trade) => { const n = [t, ...localTrades]; setLocalTrades(n); saveLocal("pats_trades", n); };
   const updateBroker = (id: string, p: Partial<Broker>) => { const n = localBrokers.map(b => b.patsBrokerProfileId === id ? { ...b, ...p } : b); setLocalBrokers(n); saveLocal("pats_brokers", n); };
   const addBroker = (b: Broker) => { const n = [...localBrokers, b]; setLocalBrokers(n); saveLocal("pats_brokers", n); };
+  const addAsset = (asset: Asset) => { const n = [asset, ...localAssets]; setLocalAssets(n); saveLocal("pats_private_assets", n); };
+  const mapAssetTicker = (assetId: string, ticker: string) => {
+    const normalizedTicker = ticker.trim().toUpperCase();
+    const n = localAssets.map((asset) => asset.privateAssetId === assetId ? {
+      ...asset,
+      ticker: normalizedTicker,
+      brokerScopedTickerId: `bst_mock_${Date.now().toString(36)}`,
+    } : asset);
+    setLocalAssets(n);
+    saveLocal("pats_private_assets", n);
+  };
   const addDoc = (d: TradeDoc) => { const n = [...localDocs, d]; setLocalDocs(n); saveLocal("pats_docs", n); };
   const updateDoc = (id: string, p: Partial<TradeDoc>) => { const n = localDocs.map(d => d.tradeDocumentId === id ? { ...d, ...p } : d); setLocalDocs(n); saveLocal("pats_docs", n); };
   const addWorkflow = (w: WorkflowRecord) => { const n = [...localWorkflows, w]; setLocalWorkflows(n); saveLocal("pats_workflows", n); };
@@ -4653,7 +4873,7 @@ export default function PatsPlatform() {
           {active === "trades" && <Trades trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
           {active === "externalTrades" && <ExternalTrades openItem={setSelectedExternal} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
-          {active === "assets" && <PrivateAssets />}
+          {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} />}
           {active === "workflows" && <Workflows workflows={localWorkflows} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
           {active === "households" && <Households role={activeRole} />}
