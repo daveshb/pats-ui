@@ -632,11 +632,11 @@ const tradeReviewCases: TradeReviewCase[] = [
     amount: "-",
     accountId: "gs-ecef",
     userId: "luisa.perez@bblabs.io",
-    diagnosis: "Vantage sent an account code that is not a PATS account id. PATS account ids must resolve to an active household account.",
+    diagnosis: "Vantage sent an account code that does not match an active account in PATS.",
     resolution: "Attach the trade to an existing PATS account or leave account unassigned and continue with Ops review.",
     primaryAction: "Assign PATS account",
     secondaryAction: "Clear Vantage account",
-    payload: [["accountId", "gs-ecef"], ["expected", "acc_..."], ["status trigger", "account not found"]],
+    payload: [["Received account", "gs-ecef"], ["Expected record", "Active PATS account"], ["Review trigger", "Account not found"]],
   },
   {
     reviewId: "rev_ticker_001",
@@ -658,7 +658,7 @@ const tradeReviewCases: TradeReviewCase[] = [
     resolution: "Create a broker ticker mapping to an active private asset, then reprocess the inbound trade.",
     primaryAction: "Map broker ticker",
     secondaryAction: "Reject inbound trade",
-    payload: [["vantageBrokerId", "35dc8d0f6703e35a81dac3912ec3b549"], ["ticker", "DOES-NOT-EXIST"], ["status trigger", "NotFoundError"]],
+    payload: [["Broker", "Morgan Stanley Alternatives"], ["Ticker", "DOES-NOT-EXIST"], ["Review trigger", "No broker ticker mapping"]],
   },
   {
     reviewId: "rev_asset_001",
@@ -681,7 +681,7 @@ const tradeReviewCases: TradeReviewCase[] = [
     resolution: "Reactivate the private asset if trading is allowed, or keep the trade blocked for Ops disposition.",
     primaryAction: "Review asset status",
     secondaryAction: "Hold trade",
-    payload: [["privateAssetId", "pa_energy_c"], ["asset status", "restricted"], ["status trigger", "privateAsset.status !== active"]],
+    payload: [["Private asset", "CleanEnergy Fund"], ["Asset status", "Restricted"], ["Review trigger", "Asset is not active"]],
   },
   {
     reviewId: "rev_mismatch_001",
@@ -703,7 +703,7 @@ const tradeReviewCases: TradeReviewCase[] = [
     resolution: "Correct the broker-scoped ticker or move the private asset to the expected broker profile.",
     primaryAction: "Fix broker mapping",
     secondaryAction: "Open asset profile",
-    payload: [["ticker broker", "pbp_schwab"], ["asset broker", "pbp_gsas"], ["status trigger", "broker profile mismatch"]],
+    payload: [["Ticker broker", "Schwab Alternative Investments"], ["Asset owner", "Goldman Sachs Advisor Solutions"], ["Review trigger", "Broker ownership mismatch"]],
   },
   {
     reviewId: "rev_user_001",
@@ -726,7 +726,7 @@ const tradeReviewCases: TradeReviewCase[] = [
     resolution: "Link the external user to a PATS contact, or keep the trade unassigned.",
     primaryAction: "Link contact",
     secondaryAction: "Clear user",
-    payload: [["userId", "external-user-441"], ["lookup", "Cognito user not found"], ["status trigger", "identity hydration failed"]],
+    payload: [["Received investor", "External user from Vantage"], ["Lookup result", "No matching PATS contact"], ["Review trigger", "Investor could not be matched"]],
   },
   {
     reviewId: "rev_workflow_001",
@@ -749,7 +749,7 @@ const tradeReviewCases: TradeReviewCase[] = [
     resolution: "Retry workflow creation after checking template, requirements, and document repository health.",
     primaryAction: "Retry workflow",
     secondaryAction: "Inspect template",
-    payload: [["workflowTemplateId", "wt_fintech_subscription"], ["document source", "iCapital"], ["status trigger", "workflow save failed"]],
+    payload: [["Workflow", "FinTech iCapital package"], ["Document source", "iCapital"], ["Review trigger", "Workflow could not be created"]],
   },
 ];
 
@@ -1711,6 +1711,29 @@ function reviewActionHint(reason: ReviewReason) {
   return hints[reason];
 }
 
+function reviewPartyLabel(item: TradeReviewCase) {
+  if (item.reason === "invalid_account" || item.reason === "inactive_account") return "Account needs mapping";
+  if (item.reason === "missing_user") return "Investor needs mapping";
+  if (item.accountId) return "Account assigned";
+  if (item.userId?.includes("@")) return item.userId;
+  if (item.userId) return "Investor linked";
+  return "Not assigned";
+}
+
+function reviewAccountLabel(item: TradeReviewCase) {
+  if (item.reason === "invalid_account") return "Needs account mapping";
+  if (item.reason === "inactive_account") return "Inactive account";
+  if (item.accountId) return "Assigned";
+  return "Not assigned";
+}
+
+function reviewUserLabel(item: TradeReviewCase) {
+  if (item.reason === "missing_user") return "Needs investor mapping";
+  if (item.userId?.includes("@")) return item.userId;
+  if (item.userId) return "Linked";
+  return "Not assigned";
+}
+
 function ReviewCenter({ role }: { role: AccessRole }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ReviewStatus>("all");
   const [reasonFilter, setReasonFilter] = useState<"all" | ReviewReason>("all");
@@ -1766,30 +1789,30 @@ function ReviewCenter({ role }: { role: AccessRole }) {
         </select>
       </Toolbar>
       <ShellCard className="overflow-hidden">
-        <div className="grid grid-cols-[0.9fr_1fr_0.9fr_1.2fr_1.2fr_1fr_0.9fr_0.65fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
+        <div className="grid grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.8fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
           <span>Status</span><span>Reason</span><span>Trade</span><span>Broker</span><span>Asset / ticker</span><span>Account / user</span><span>Received</span><span />
         </div>
         <div className="divide-y divide-slate-800/80">
           {filtered.map((item) => (
-            <button key={item.reviewId} onClick={() => setSelectedCase(item)} className="grid w-full grid-cols-[0.9fr_1fr_0.9fr_1.2fr_1.2fr_1fr_0.9fr_0.65fr] items-center px-5 py-3.5 text-left transition hover:bg-slate-900/65">
+            <button key={item.reviewId} onClick={() => setSelectedCase(item)} className="grid w-full grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.8fr] items-center px-5 py-3.5 text-left transition hover:bg-slate-900/65">
               <span><StatusBadge value={item.status} /></span>
               <span>
                 <span className="block text-xs font-semibold text-slate-100">{reviewReasonLabel(item.reason)}</span>
                 <span className="mt-0.5 block text-[10px] text-slate-500">{item.priority} priority</span>
               </span>
               <span>
-                <span className="block text-xs font-semibold text-sky-300">{item.inboundTradeId}</span>
-                <span className="mt-0.5 block max-w-[130px] truncate text-[10px] text-slate-500">{item.vantageTradeId}</span>
+                <span className="block text-xs font-semibold text-slate-100">{item.side}</span>
+                <span className="mt-0.5 block text-[10px] text-slate-500">{item.quantity !== "-" ? item.quantity : item.amount}</span>
               </span>
               <span>
                 <span className="block text-xs text-slate-300">{item.broker}</span>
-                <span className="mt-0.5 block max-w-[150px] truncate text-[10px] text-slate-500">{item.vantageBrokerId}</span>
+                <span className="mt-0.5 block text-[10px] text-slate-500">{item.source}</span>
               </span>
               <span>
                 <span className="block text-xs font-semibold text-slate-100">{item.privateAsset}</span>
                 <span className="mt-0.5 block text-[10px] text-sky-300">{item.ticker}</span>
               </span>
-              <span className="text-[11px] text-slate-400">{item.accountId ?? item.userId ?? "Not assigned"}</span>
+              <span className="text-[11px] text-slate-400">{reviewPartyLabel(item)}</span>
               <span className="text-xs text-slate-500">{item.receivedAt}</span>
               <span className="text-right text-xs font-semibold text-sky-300">{item.primaryAction}</span>
             </button>
@@ -1820,16 +1843,16 @@ function ReviewCaseDetails({ item, onClose }: { item: TradeReviewCase; onClose: 
       <ShellCard className="mb-5 p-5">
         <h3 className="text-sm font-semibold text-white">Trade context</h3>
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <Info label="Inbound trade" value={item.inboundTradeId} />
-          <Info label="Vantage trade" value={item.vantageTradeId} />
+          <Info label="Source" value={item.source} />
+          <Info label="Received" value={item.receivedAt} />
           <Info label="Broker" value={item.broker} />
-          <Info label="Vantage broker id" value={item.vantageBrokerId} />
+          <Info label="Priority" value={item.priority} />
           <Info label="Ticker" value={item.ticker} />
           <Info label="Private asset" value={item.privateAsset} />
           <Info label="Side" value={item.side} />
           <Info label="Quantity / amount" value={`${item.quantity} / ${item.amount}`} />
-          <Info label="Account" value={item.accountId ?? "Not assigned"} />
-          <Info label="User" value={item.userId ?? "Not assigned"} />
+          <Info label="Account" value={reviewAccountLabel(item)} />
+          <Info label="Investor" value={reviewUserLabel(item)} />
         </div>
       </ShellCard>
       <ShellCard className="mb-5 p-5">
@@ -1841,7 +1864,7 @@ function ReviewCaseDetails({ item, onClose }: { item: TradeReviewCase; onClose: 
         </div>
       </ShellCard>
       <ShellCard className="mb-5 p-5">
-        <h3 className="text-sm font-semibold text-white">Blocking payload</h3>
+        <h3 className="text-sm font-semibold text-white">Review inputs</h3>
         <div className="mt-4 space-y-2">
           {item.payload.map(([label, value]) => (
             <div key={label} className="grid grid-cols-[0.8fr_1.2fr] rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs">
@@ -2675,19 +2698,23 @@ function DocumentsLegacy() {
             <span>Status</span>
             <span>Due</span>
           </div>
-          {tradeDocuments.map((doc) => (
-            <div key={doc.tradeDocumentId} className="grid grid-cols-[1.15fr_0.65fr_0.85fr_0.85fr_0.75fr_0.75fr] items-center border-t border-slate-800/80 px-5 py-4 text-sm">
-              <span>
-                <span className="block font-semibold text-slate-100">{doc.name}</span>
-                <span className="mt-1 block text-[11px] text-slate-500">{doc.privateAssetId ?? "—"}</span>
-              </span>
-              <span className="text-xs text-sky-300">{doc.inboundTradeId}</span>
-              <span className="text-xs text-slate-300">{displayLabel(doc.platform)}</span>
-              <span><StatusBadge value={displayLabel(doc.type)} tone="gray" /></span>
-              <span><StatusBadge value={doc.status} /></span>
-              <span className="text-xs text-slate-400">{displayLabel(doc.source)}</span>
-            </div>
-          ))}
+          {tradeDocuments.map((doc) => {
+            const docAsset = assets.find((asset) => asset.privateAssetId === doc.privateAssetId);
+            const docTrade = trades.find((trade) => trade.inboundTradeId === doc.inboundTradeId);
+            return (
+              <div key={doc.tradeDocumentId} className="grid grid-cols-[1.15fr_0.65fr_0.85fr_0.85fr_0.75fr_0.75fr] items-center border-t border-slate-800/80 px-5 py-4 text-sm">
+                <span>
+                  <span className="block font-semibold text-slate-100">{doc.name}</span>
+                  <span className="mt-1 block text-[11px] text-slate-500">{docAsset?.name ?? "No asset assigned"}</span>
+                </span>
+                <span className="text-xs text-sky-300">{docTrade ? `${docTrade.type} ${docTrade.ticker}` : "Trade pending"}</span>
+                <span className="text-xs text-slate-300">{displayLabel(doc.platform)}</span>
+                <span><StatusBadge value={displayLabel(doc.type)} tone="gray" /></span>
+                <span><StatusBadge value={doc.status} /></span>
+                <span className="text-xs text-slate-400">{displayLabel(doc.source)}</span>
+              </div>
+            );
+          })}
         </ShellCard>
         <ShellCard className="p-5">
           <h2 className="text-base font-semibold text-white">Document module target flow</h2>
@@ -2835,14 +2862,14 @@ function WealthManagerDocumentsView({ docs }: { docs: TradeDoc[] }) {
         <MetricCard label="Blocked" value={`${docs.filter((doc) => doc.status === "blocked").length}`} />
       </div>
       <div className="grid grid-cols-2 gap-5">
-        {accountIds.map((accountId) => {
+        {accountIds.map((accountId, index) => {
           const accountDocs = docs.filter((doc) => doc.accountId === accountId);
           const open = accountDocs.filter((doc) => doc.status !== "completed" && doc.status !== "cancelled").length;
           return (
             <ShellCard key={accountId} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-white">{accountId}</p>
+                  <p className="text-sm font-semibold text-white">Account package {index + 1}</p>
                   <p className="mt-1 text-xs text-slate-500">Household follow-up package</p>
                 </div>
                 <StatusBadge value={open ? `${open} open` : "clear"} tone={open ? "yellow" : "green"} />
@@ -2870,7 +2897,7 @@ function WealthManagerDocumentsView({ docs }: { docs: TradeDoc[] }) {
             <div key={doc.tradeDocumentId} className="grid grid-cols-[1fr_0.75fr_0.75fr_0.7fr] border-b border-slate-800/70 px-5 py-4 text-sm last:border-b-0">
               <div>
                 <p className="font-semibold text-slate-100">{doc.name}</p>
-                <p className="mt-1 text-xs text-slate-500">{asset?.name ?? doc.privateAssetId} · {doc.accountId}</p>
+                <p className="mt-1 text-xs text-slate-500">{asset?.name ?? "Asset pending"} - Account assigned</p>
               </div>
               <span className="text-xs text-slate-300">{actorLabel(doc)}</span>
               <span className="text-xs text-slate-400">{doc.dueDate ?? "-"}</span>
@@ -2892,7 +2919,7 @@ function SponsorDocumentsView({ docs, viewer }: { docs: TradeDoc[]; viewer: Docu
         <div className="mt-4 space-y-2">
           {(viewer.assetIds ?? []).map((assetId) => {
             const asset = assets.find((item) => item.privateAssetId === assetId);
-            return <Info key={assetId} label="Private asset" value={asset?.name ?? assetId} />;
+            return <Info key={assetId} label="Private asset" value={asset?.name ?? "Asset pending"} />;
           })}
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2">
@@ -3179,6 +3206,7 @@ function Documents({
             {visibleDocs.map((doc) => {
               const isSelected = doc.tradeDocumentId === selectedDocument.tradeDocumentId;
               const docAsset = assets.find((a) => a.privateAssetId === doc.privateAssetId);
+              const docTrade = trades.find((trade) => trade.inboundTradeId === doc.inboundTradeId);
               return (
                 <button
                   key={doc.tradeDocumentId}
@@ -3187,7 +3215,7 @@ function Documents({
                 >
                   <span>
                     <span className="block font-semibold text-slate-100">{doc.name}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">{docAsset?.name ?? doc.inboundTradeId}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">{docAsset?.name ?? "No asset assigned"}{docTrade ? ` - ${docTrade.type} ${docTrade.ticker}` : ""}</span>
                   </span>
                   <span><StatusBadge value={displayLabel(doc.type)} tone="gray" /></span>
                   <span className="text-xs text-slate-300">{actorLabel(doc)}</span>
@@ -3205,7 +3233,7 @@ function Documents({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selectedDocument.name}</h2>
-                <p className="mt-1 text-xs text-slate-500">{relatedAsset?.name ?? selectedDocument.privateAssetId ?? "No asset"} · {relatedBroker?.name ?? selectedDocument.patsBrokerProfileId ?? "No broker"}</p>
+                <p className="mt-1 text-xs text-slate-500">{relatedAsset?.name ?? "No asset"} - {relatedBroker?.name ?? "No broker"}</p>
               </div>
               <StatusBadge value={selectedDocument.status} />
             </div>
@@ -3217,11 +3245,11 @@ function Documents({
               <Info label="Required actor" value={displayLabel(selectedDocument.requiredActorType ?? "not assigned")} />
               <Info label="Due date" value={selectedDocument.dueDate ?? "Not set"} />
               <Info label="Action required" value={selectedDocument.actionRequired ? "Yes" : "No"} />
-              <Info label="Inbound trade" value={selectedDocument.inboundTradeId} />
-              {selectedDocument.accountId && <Info label="Account" value={selectedDocument.accountId} />}
+              <Info label="Trade" value={relatedTrade ? `${relatedTrade.type} ${relatedTrade.ticker}` : "Trade pending"} />
+              {selectedDocument.accountId && <Info label="Account" value="Assigned" />}
               {selectedDocument.signerPersonId && <Info label="Signer" value={personDisplayName(householdPersons.find((p) => p.personId === selectedDocument.signerPersonId) ?? householdPersons[0])} />}
-              {selectedDocument.tradeWorkflowId && <Info label="Trade workflow" value={selectedDocument.tradeWorkflowId} />}
-              {selectedDocument.externalEnvelopeId && <Info label="Envelope ID" value={selectedDocument.externalEnvelopeId} />}
+              {selectedDocument.tradeWorkflowId && <Info label="Workflow" value="Started" />}
+              {selectedDocument.externalEnvelopeId && <Info label="Envelope" value="Available" />}
               {selectedDocument.sentAt && <Info label="Sent at" value={new Date(selectedDocument.sentAt).toLocaleString()} />}
               {selectedDocument.signedAt && <Info label="Signed at" value={new Date(selectedDocument.signedAt).toLocaleString()} />}
               {selectedDocument.completedAt && <Info label="Completed at" value={new Date(selectedDocument.completedAt).toLocaleString()} />}
@@ -3578,7 +3606,6 @@ function Execution({ role }: { role: AccessRole }) {
             <div className="flex items-start justify-between gap-6">
               <div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-sky-300">{flow.tradeId}</span>
                   <span className="text-sm font-semibold text-white">{flow.ticker}</span>
                   <StatusBadge value={flow.executionStatus} />
                 </div>
@@ -3631,9 +3658,9 @@ function Execution({ role }: { role: AccessRole }) {
                   <Route className="h-3.5 w-3.5 text-sky-300" />
                 </div>
                 <div className="mt-3 space-y-2">
-                  <Info label="Execution ID" value={flow.executionId ?? "Not created"} />
+                  <Info label="Execution" value={flow.executionId ? "Created" : "Not created"} />
                   <Info label="Route method" value={flow.routeMethod ? displayLabel(flow.routeMethod) : "Waiting"} />
-                  <Info label="External execution" value={flow.externalExecutionId ?? "-"} />
+                  <Info label="Vantage return" value={flow.externalExecutionId ? "Linked" : "Not linked"} />
                   <Info label="Action" value={executionPrimaryAction(flow)} />
                 </div>
                 {canOperateExecution && !flow.executionId && (
@@ -3664,7 +3691,7 @@ function Execution({ role }: { role: AccessRole }) {
                     <div key={fill.fillId} className="rounded-md border border-slate-800 bg-slate-950/50 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-xs font-semibold text-slate-100">{fill.fillId}</p>
+                          <p className="text-xs font-semibold text-slate-100">Fill recorded</p>
                           <p className="mt-1 text-[11px] text-slate-500">{fill.quantity} @ {fill.price} - {fill.filledAt}</p>
                         </div>
                         <StatusBadge value={fill.status} />
@@ -3801,13 +3828,13 @@ function ExecutionFillPanel({ flow, onAdd, onClose }: { flow: ExecutionFlowRecor
   };
 
   return (
-    <DetailPanel title="Create Execution Fill" subtitle={`${flow.tradeId} - ${flow.ticker} - ${flow.asset}`} onClose={onClose}>
+    <DetailPanel title="Create Execution Fill" subtitle={`${flow.ticker} - ${flow.asset}`} onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Execution context</h3>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <Info label="Execution ID" value={flow.executionId ?? "Not created"} />
-            <Info label="Inbound trade" value={flow.inboundTradeId} />
+            <Info label="Execution" value={flow.executionId ? "Created" : "Not created"} />
+            <Info label="Trade" value={`${flow.side} ${flow.ticker}`} />
             <Info label="Broker" value={flow.broker} />
             <Info label="Private asset" value={flow.asset} />
           </div>
@@ -4326,7 +4353,7 @@ function TradeDetails({ trade, onClose }: { trade: Trade; onClose: () => void })
           <Info label="Side / action" value={trade.type} />
           <Info label="Quantity" value={trade.quantity} />
           <Info label="Amount" value={trade.amount} />
-          <Info label="Investor / account" value={`${trade.userId?.replace("user-", "User ") ?? "Unknown"} / ${trade.accountId?.replace("acct-", "Account ") ?? "Unknown"}`} />
+          <Info label="Investor / account" value={tradeInvestorLabel(trade)} />
           <Info label="Workflow needed" value={trade.workflowRequired ? "Yes" : "No"} />
           <Info label="Business reason" value={displayLabel(trade.workflowReason)} />
         </div>
@@ -4777,7 +4804,7 @@ function Households({ role }: { role: AccessRole }) {
                           <span className="text-sm font-semibold text-slate-100">{personDisplayName(person)}</span>
                           <StatusBadge value={entityTypeLabel(person.entityType)} tone={entityTypeTone(person.entityType)} />
                         </div>
-                        <span className="text-[10px] text-slate-600">{person.personId}</span>
+                        <span className="text-[10px] text-slate-600">{person.email ?? displayLabel(person.role)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -4851,7 +4878,7 @@ function Households({ role }: { role: AccessRole }) {
                   <div key={account.accountId} className="grid grid-cols-[1fr_0.85fr_0.9fr_1.5fr_1.3fr_0.65fr] items-start px-5 py-3.5 text-sm">
                     <span>
                       <span className="block font-semibold text-slate-100">{account.accountNumber}</span>
-                      <span className="mt-0.5 block text-[11px] text-slate-500">{account.accountId}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">{account.custodian}</span>
                     </span>
                     <span className="pt-0.5"><StatusBadge value={displayLabel(account.accountType)} tone="blue" /></span>
                     <span className="text-xs text-slate-300 pt-0.5">{account.custodian}</span>
