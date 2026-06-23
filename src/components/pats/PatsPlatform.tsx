@@ -636,7 +636,7 @@ const tradeReviewCases: TradeReviewCase[] = [
     resolution: "Attach the trade to an existing PATS account or leave account unassigned and continue with Ops review.",
     primaryAction: "Assign PATS account",
     secondaryAction: "Clear Vantage account",
-    payload: [["Received account", "gs-ecef"], ["Expected record", "Active PATS account"], ["Review trigger", "Account not found"]],
+    payload: [["Broker account code", "GS-ECEF"], ["Expected format", "Active PATS account"], ["Review trigger", "Account not found in PATS"]],
   },
   {
     reviewId: "rev_ticker_001",
@@ -750,6 +750,52 @@ const tradeReviewCases: TradeReviewCase[] = [
     primaryAction: "Retry workflow",
     secondaryAction: "Inspect template",
     payload: [["Workflow", "FinTech iCapital package"], ["Document source", "iCapital"], ["Review trigger", "Workflow could not be created"]],
+  },
+  {
+    reviewId: "rev_unknown_asset_001",
+    inboundTradeId: "it_unknown_asset",
+    vantageTradeId: "vt_unknown_asset_001",
+    status: "unresolved",
+    reason: "unknown_private_asset",
+    priority: "High",
+    receivedAt: "8:30 AM",
+    source: "Vantage API",
+    broker: "Schwab Alternative Investments",
+    vantageBrokerId: "b45e6cb2154b4d8e865005c7f1d401cc",
+    ticker: "SCHWAB-RE",
+    privateAsset: "Not resolved",
+    side: "Subscribe",
+    quantity: "3,000",
+    amount: "-",
+    diagnosis: "The broker was identified as Schwab Alternative Investments, but no private asset record in PATS matches this ticker. The trade cannot continue until the asset is created or an existing asset is mapped to this ticker.",
+    resolution: "Create a new private asset for this ticker and broker, or map this ticker to an existing PATS asset.",
+    primaryAction: "Create private asset",
+    secondaryAction: "Map to existing",
+    payload: [["Broker", "Schwab Alternative Investments"], ["Ticker received", "SCHWAB-RE"], ["Review trigger", "No private asset found for this ticker"]],
+  },
+  {
+    reviewId: "rev_eligibility_001",
+    inboundTradeId: "it_eligibility_error",
+    vantageTradeId: "vt_eligibility_001",
+    status: "needs_review",
+    reason: "eligibility_error",
+    priority: "Medium",
+    receivedAt: "7:45 AM",
+    source: "Vantage API",
+    broker: "Goldman Sachs Advisor Solutions",
+    vantageBrokerId: "176f7a13d62244845b746b04c79fa621",
+    ticker: "TECH-A",
+    privateAsset: "TechCorp Series A",
+    side: "Subscribe",
+    quantity: "5,000",
+    amount: "$226,000",
+    accountId: "acc_003",
+    userId: "nina.walsh@example.com",
+    diagnosis: "The eligibility check for this investor and asset returned an error. The investor may have a prior eligibility record that expired, or the eligibility service could not complete the verification.",
+    resolution: "Manually mark the investor as eligible, route the trade directly to a workflow, or retry the eligibility check after reviewing the investor's record.",
+    primaryAction: "Mark eligible",
+    secondaryAction: "Retry check",
+    payload: [["Investor", "nina.walsh@example.com"], ["Asset", "TechCorp Series A"], ["Review trigger", "Eligibility check failed"]],
   },
 ];
 
@@ -1737,7 +1783,7 @@ function reviewUserLabel(item: TradeReviewCase) {
 function ReviewCenter({ role }: { role: AccessRole }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ReviewStatus>("all");
   const [reasonFilter, setReasonFilter] = useState<"all" | ReviewReason>("all");
-  const [selectedCase, setSelectedCase] = useState<TradeReviewCase | null>(null);
+  const [expandedCase, setExpandedCase] = useState<string | null>(null);
 
   const cases = tradeReviewCases;
   const filtered = cases.filter((item) => {
@@ -1789,100 +1835,773 @@ function ReviewCenter({ role }: { role: AccessRole }) {
         </select>
       </Toolbar>
       <ShellCard className="overflow-hidden">
-        <div className="grid grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.8fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
+        <div className="grid grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.5fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
           <span>Status</span><span>Reason</span><span>Trade</span><span>Broker</span><span>Asset / ticker</span><span>Account / user</span><span>Received</span><span />
         </div>
         <div className="divide-y divide-slate-800/80">
-          {filtered.map((item) => (
-            <button key={item.reviewId} onClick={() => setSelectedCase(item)} className="grid w-full grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.8fr] items-center px-5 py-3.5 text-left transition hover:bg-slate-900/65">
-              <span><StatusBadge value={item.status} /></span>
-              <span>
-                <span className="block text-xs font-semibold text-slate-100">{reviewReasonLabel(item.reason)}</span>
-                <span className="mt-0.5 block text-[10px] text-slate-500">{item.priority} priority</span>
-              </span>
-              <span>
-                <span className="block text-xs font-semibold text-slate-100">{item.side}</span>
-                <span className="mt-0.5 block text-[10px] text-slate-500">{item.quantity !== "-" ? item.quantity : item.amount}</span>
-              </span>
-              <span>
-                <span className="block text-xs text-slate-300">{item.broker}</span>
-                <span className="mt-0.5 block text-[10px] text-slate-500">{item.source}</span>
-              </span>
-              <span>
-                <span className="block text-xs font-semibold text-slate-100">{item.privateAsset}</span>
-                <span className="mt-0.5 block text-[10px] text-sky-300">{item.ticker}</span>
-              </span>
-              <span className="text-[11px] text-slate-400">{reviewPartyLabel(item)}</span>
-              <span className="text-xs text-slate-500">{item.receivedAt}</span>
-              <span className="text-right text-xs font-semibold text-sky-300">{item.primaryAction}</span>
-            </button>
-          ))}
+          {filtered.map((item) => {
+            const isOpen = expandedCase === item.reviewId;
+            return (
+              <div key={item.reviewId}>
+                <button
+                  onClick={() => setExpandedCase(isOpen ? null : item.reviewId)}
+                  className={`grid w-full grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.5fr] items-center px-5 py-3.5 text-left transition hover:bg-slate-900/65 ${isOpen ? "bg-slate-900/50" : ""}`}
+                >
+                  <span><StatusBadge value={item.status} /></span>
+                  <span>
+                    <span className="block text-xs font-semibold text-slate-100">{reviewReasonLabel(item.reason)}</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500">{item.priority} priority</span>
+                  </span>
+                  <span>
+                    <span className="block text-xs font-semibold text-slate-100">{item.side}</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500">{item.quantity !== "-" ? item.quantity : item.amount}</span>
+                  </span>
+                  <span>
+                    <span className="block text-xs text-slate-300">{item.broker}</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500">{item.source}</span>
+                  </span>
+                  <span>
+                    <span className="block text-xs font-semibold text-slate-100">{item.privateAsset}</span>
+                    <span className="mt-0.5 block text-[10px] text-sky-300">{item.ticker}</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400">{reviewPartyLabel(item)}</span>
+                  <span className="text-xs text-slate-500">{item.receivedAt}</span>
+                  <span className="flex justify-end">
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180 text-sky-400" : "text-slate-600"}`} />
+                  </span>
+                </button>
+                {isOpen && <ReviewCaseExpanded item={item} />}
+              </div>
+            );
+          })}
           {filtered.length === 0 && <p className="px-5 py-6 text-xs text-slate-500">No review cases match the current filters.</p>}
         </div>
       </ShellCard>
-      {selectedCase && <ReviewCaseDetails item={selectedCase} onClose={() => setSelectedCase(null)} />}
     </>
   );
 }
 
-function ReviewCaseDetails({ item, onClose }: { item: TradeReviewCase; onClose: () => void }) {
+function reviewAccountDisplay(item: TradeReviewCase): { label: string; value: string } | null {
+  if (!item.accountId) return null;
+  const found = householdAccounts.find((a) => a.accountId === item.accountId);
+  if (found) {
+    const hh = households.find((h) => h.householdId === found.householdId);
+    return { label: "Account", value: `${found.accountNumber} · ${hh?.name ?? found.custodian}` };
+  }
+  return { label: "Broker account code", value: item.accountId.toUpperCase() };
+}
+
+function reviewUserDisplay(item: TradeReviewCase): { label: string; value: string } | null {
+  if (!item.userId) return null;
+  if (item.userId.includes("@")) return { label: "Investor", value: item.userId };
+  return { label: "Investor code from broker", value: item.userId };
+}
+
+function ReviewCaseExpanded({ item }: { item: TradeReviewCase }) {
+  const accountInfo = reviewAccountDisplay(item);
+  const userInfo = reviewUserDisplay(item);
+
   return (
-    <DetailPanel title={reviewReasonLabel(item.reason)} subtitle={`${item.ticker} · ${item.broker}`} onClose={onClose}>
-      <ShellCard className="mb-5 p-5">
-        <div className="flex items-start justify-between">
+    <div className="border-t border-slate-800 bg-slate-950/40 px-5 py-5">
+      <div className="grid grid-cols-[1fr_1.65fr] gap-6">
+        <div className="space-y-4">
           <div>
-            <p className="text-xs font-semibold text-slate-500">Review state</p>
-            <div className="mt-3 flex items-center gap-2">
-              <StatusBadge value={item.status} />
-              <StatusBadge value={item.priority} />
+            <p className="mb-3 text-[9px] font-semibold uppercase tracking-widest text-slate-600">Trade context</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <Info label="Received" value={item.receivedAt} />
+              <Info label="Source" value={item.source} />
+              <Info label="Broker" value={item.broker} />
+              <Info label="Priority" value={item.priority} />
+              <Info label="Ticker" value={item.ticker} />
+              <Info label="Private asset" value={item.privateAsset} />
+              <Info label="Side" value={item.side} />
+              <Info label="Qty / Amount" value={`${item.quantity} / ${item.amount}`} />
+              {accountInfo && <Info label={accountInfo.label} value={accountInfo.value} />}
+              {userInfo && <Info label={userInfo.label} value={userInfo.value} />}
             </div>
           </div>
-          <span className="rounded-md border border-slate-800 bg-slate-950/45 px-2 py-1 text-[10px] font-semibold text-slate-400">{item.source}</span>
-        </div>
-      </ShellCard>
-      <ShellCard className="mb-5 p-5">
-        <h3 className="text-sm font-semibold text-white">Trade context</h3>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <Info label="Source" value={item.source} />
-          <Info label="Received" value={item.receivedAt} />
-          <Info label="Broker" value={item.broker} />
-          <Info label="Priority" value={item.priority} />
-          <Info label="Ticker" value={item.ticker} />
-          <Info label="Private asset" value={item.privateAsset} />
-          <Info label="Side" value={item.side} />
-          <Info label="Quantity / amount" value={`${item.quantity} / ${item.amount}`} />
-          <Info label="Account" value={reviewAccountLabel(item)} />
-          <Info label="Investor" value={reviewUserLabel(item)} />
-        </div>
-      </ShellCard>
-      <ShellCard className="mb-5 p-5">
-        <h3 className="text-sm font-semibold text-white">Diagnosis</h3>
-        <p className="mt-3 text-sm leading-6 text-slate-300">{item.diagnosis}</p>
-        <div className="mt-4 rounded-md border border-sky-400/20 bg-sky-400/10 p-3">
-          <p className="text-xs font-semibold text-sky-200">{item.resolution}</p>
-          <p className="mt-1.5 text-[11px] text-sky-100/70">{reviewActionHint(item.reason)}</p>
-        </div>
-      </ShellCard>
-      <ShellCard className="mb-5 p-5">
-        <h3 className="text-sm font-semibold text-white">Review inputs</h3>
-        <div className="mt-4 space-y-2">
-          {item.payload.map(([label, value]) => (
-            <div key={label} className="grid grid-cols-[0.8fr_1.2fr] rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs">
-              <span className="font-semibold text-slate-500">{label}</span>
-              <span className="truncate text-slate-200">{value}</span>
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3">
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-slate-600">Diagnosis</p>
+            <p className="text-xs leading-5 text-slate-300">{item.diagnosis}</p>
+          </div>
+          <div>
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-slate-600">What was received</p>
+            <div className="space-y-1.5">
+              {item.payload.map(([label, value]) => (
+                <div key={label} className="grid grid-cols-[0.8fr_1.2fr] rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs">
+                  <span className="font-semibold text-slate-500">{label}</span>
+                  <span className="truncate text-slate-200">{value}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      </ShellCard>
-      <ShellCard className="p-5">
-        <h3 className="text-sm font-semibold text-white">Ops resolution</h3>
-        <div className="mt-4 grid gap-3">
-          <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">{item.primaryAction}</button>
-          {item.secondaryAction && <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">{item.secondaryAction}</button>}
-          <button className="h-9 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-xs font-semibold text-emerald-300">Reprocess inbound trade</button>
+        <div>
+          <p className="mb-3 text-[9px] font-semibold uppercase tracking-widest text-slate-600">Resolution options</p>
+          <div className="mb-4 rounded-md border border-sky-400/20 bg-sky-400/10 p-3">
+            <p className="text-xs font-semibold text-sky-200">{item.resolution}</p>
+            <p className="mt-1 text-[11px] text-sky-100/70">{reviewActionHint(item.reason)}</p>
+          </div>
+          {item.reason === "invalid_account" && <InvalidAccountPanel item={item} />}
+          {item.reason === "inactive_account" && <InactiveAccountPanel item={item} />}
+          {item.reason === "missing_broker_ticker" && <MissingTickerPanel item={item} />}
+          {item.reason === "unknown_private_asset" && <UnknownAssetPanel item={item} />}
+          {item.reason === "missing_user" && <MissingUserPanel item={item} />}
+          {item.reason === "broker_asset_mismatch" && <BrokerMismatchPanel item={item} />}
+          {item.reason === "inactive_private_asset" && <InactiveAssetPanel item={item} />}
+          {item.reason === "eligibility_error" && <EligibilityErrorPanel item={item} />}
+          {item.reason === "workflow_creation_error" && <WorkflowErrorPanel item={item} />}
         </div>
-      </ShellCard>
-    </DetailPanel>
+      </div>
+    </div>
+  );
+}
+
+function ReviewOptionTab<T extends string>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div className={`mb-4 grid gap-2`} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+      {options.map(([v, label]) => (
+        <button key={v} onClick={() => onChange(v)}
+          className={`rounded-md border px-3 py-2 text-left text-xs font-semibold transition ${value === v ? "border-sky-500/50 bg-sky-500/15 text-sky-300" : "border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700 hover:text-slate-300"}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReceivedBadge({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold text-amber-300">{label}</p>
+        <p className="mt-0.5 truncate font-mono text-xs text-amber-100">{value}</p>
+      </div>
+      <span className="flex-shrink-0 text-[10px] font-semibold text-amber-400/70">{note}</span>
+    </div>
+  );
+}
+
+function InvalidAccountPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"assign" | "add" | "clear">("assign");
+  const [selectedHousehold, setSelectedHousehold] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState("");
+  const [newAccountNumber, setNewAccountNumber] = useState("");
+  const [newAccountType, setNewAccountType] = useState("individual");
+  const [newCustodian, setNewCustodian] = useState("");
+
+  const hhAccounts = householdAccounts.filter((a) => a.householdId === selectedHousehold && a.status === "active");
+  const selectedAccountObj = householdAccounts.find((a) => a.accountId === selectedAccount);
+  const selectedHhObj = households.find((h) => h.householdId === selectedHousehold);
+
+  return (
+    <div>
+      <ReceivedBadge label="Account code sent by broker" value={(item.accountId ?? "—").toUpperCase()} note="Not in PATS" />
+      <ReviewOptionTab
+        options={[["assign", "Assign existing account"], ["add", "Add to household"], ["clear", "Continue without account"]] as ["assign" | "add" | "clear", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "assign" && (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Household</label>
+            <select value={selectedHousehold} onChange={(e) => { setSelectedHousehold(e.target.value); setSelectedAccount(""); }}
+              className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none">
+              <option value="">Select household...</option>
+              {households.filter((h) => h.status === "active").map((hh) => (
+                <option key={hh.householdId} value={hh.householdId}>{hh.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedHousehold && (
+            <div>
+              <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Select account</label>
+              {hhAccounts.length > 0 ? (
+                <div className="space-y-2">
+                  {hhAccounts.map((acct) => {
+                    const primary = householdPersons.find((p) => p.personId === acct.primaryPersonId);
+                    const primaryName = primary ? (primary.firstName ? `${primary.firstName} ${primary.lastName}` : primary.entityName) : "—";
+                    const isSelected = selectedAccount === acct.accountId;
+                    return (
+                      <button key={acct.accountId} onClick={() => setSelectedAccount(acct.accountId)}
+                        className={`w-full rounded-md border px-3 py-2.5 text-left transition ${isSelected ? "border-sky-500/50 bg-sky-500/10" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-100">{acct.accountNumber}</span>
+                          <div className="flex items-center gap-2">
+                            <StatusBadge value={acct.accountType} />
+                            <StatusBadge value={acct.status} />
+                          </div>
+                        </div>
+                        <div className="mt-1 flex gap-2 text-[10px] text-slate-500">
+                          <span>{primaryName}</span><span>·</span><span>{acct.custodian}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">No active accounts in this household.</p>
+              )}
+            </div>
+          )}
+          <button disabled={!selectedAccount}
+            className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
+            {selectedAccountObj ? `Assign ${selectedAccountObj.accountNumber} & reprocess trade` : "Assign account & reprocess trade"}
+          </button>
+        </div>
+      )}
+      {mode === "add" && (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Household</label>
+            <select value={selectedHousehold} onChange={(e) => setSelectedHousehold(e.target.value)}
+              className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none">
+              <option value="">Select household...</option>
+              {households.filter((h) => h.status === "active").map((hh) => (
+                <option key={hh.householdId} value={hh.householdId}>{hh.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedHousehold && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Account number</label>
+                  <input type="text" placeholder="e.g. GSAS-4492" value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)}
+                    className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none placeholder:text-slate-600" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Account type</label>
+                  <select value={newAccountType} onChange={(e) => setNewAccountType(e.target.value)}
+                    className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none">
+                    <option value="individual">Individual</option>
+                    <option value="joint">Joint</option>
+                    <option value="trust">Trust</option>
+                    <option value="ira">IRA</option>
+                    <option value="roth_ira">Roth IRA</option>
+                    <option value="entity">Entity</option>
+                    <option value="limited_partnership">Limited partnership</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Custodian</label>
+                <input type="text" placeholder="e.g. Goldman Sachs" value={newCustodian} onChange={(e) => setNewCustodian(e.target.value)}
+                  className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none placeholder:text-slate-600" />
+              </div>
+              <button disabled={!newAccountNumber.trim() || !newCustodian.trim()}
+                className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
+                Add account to {selectedHhObj?.name ?? "household"} & reprocess trade
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {mode === "clear" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            The broker account code <span className="font-mono text-slate-200">{(item.accountId ?? "").toUpperCase()}</span> will be cleared. The trade will continue without an assigned account — Ops must verify disposition before routing to execution.
+          </div>
+          <button className="h-9 w-full rounded-md border border-amber-400/30 bg-amber-400/10 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/15">
+            Clear account & reprocess trade
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InactiveAccountPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"reactivate" | "reassign" | "clear">("reactivate");
+  const [selectedHousehold, setSelectedHousehold] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState("");
+
+  const currentAccount = householdAccounts.find((a) => a.accountId === item.accountId);
+  const hhAccounts = householdAccounts.filter((a) => a.householdId === selectedHousehold && a.status === "active" && a.accountId !== item.accountId);
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+          <div>
+            <p className="text-[10px] font-semibold text-amber-300">Inactive account</p>
+            <p className="mt-0.5 font-mono text-xs text-amber-100">{currentAccount?.accountNumber ?? item.accountId}</p>
+          </div>
+        </div>
+        <StatusBadge value="inactive" />
+      </div>
+      <ReviewOptionTab
+        options={[["reactivate", "Reactivate account"], ["reassign", "Use different account"], ["clear", "Clear reference"]] as ["reactivate" | "reassign" | "clear", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "reactivate" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            Account <span className="text-slate-200">{currentAccount?.accountNumber ?? item.accountId}</span> will be set to active. The trade will be reprocessed automatically once the account is reactivated.
+          </div>
+          <button className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400">
+            Reactivate account & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "reassign" && (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1.5 block text-[10px] font-semibold text-slate-500">Household</label>
+            <select value={selectedHousehold} onChange={(e) => { setSelectedHousehold(e.target.value); setSelectedAccount(""); }}
+              className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none">
+              <option value="">Select household...</option>
+              {households.filter((h) => h.status === "active").map((hh) => (
+                <option key={hh.householdId} value={hh.householdId}>{hh.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedHousehold && (
+            <div className="space-y-2">
+              {hhAccounts.length > 0 ? hhAccounts.map((acct) => {
+                const primary = householdPersons.find((p) => p.personId === acct.primaryPersonId);
+                const primaryName = primary ? (primary.firstName ? `${primary.firstName} ${primary.lastName}` : primary.entityName) : "—";
+                const isSelected = selectedAccount === acct.accountId;
+                return (
+                  <button key={acct.accountId} onClick={() => setSelectedAccount(acct.accountId)}
+                    className={`w-full rounded-md border px-3 py-2.5 text-left transition ${isSelected ? "border-sky-500/50 bg-sky-500/10" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-100">{acct.accountNumber}</span>
+                      <StatusBadge value={acct.accountType} />
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-slate-500">{primaryName} · {acct.custodian}</div>
+                  </button>
+                );
+              }) : <p className="text-xs text-slate-500">No other active accounts in this household.</p>}
+            </div>
+          )}
+          <button disabled={!selectedAccount}
+            className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
+            Reassign account & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "clear" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            The account reference will be cleared. The trade will continue without an assigned account — Ops must verify disposition before routing to execution.
+          </div>
+          <button className="h-9 w-full rounded-md border border-amber-400/30 bg-amber-400/10 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/15">
+            Clear account & reprocess trade
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MissingTickerPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"map" | "reject">("map");
+  const [selectedAsset, setSelectedAsset] = useState("");
+
+  const brokerAssets = assets.filter((a) => a.broker === item.broker && a.status === "active");
+
+  return (
+    <div>
+      <ReceivedBadge label="Ticker sent by broker — no mapping found" value={`${item.ticker} · ${item.broker}`} note="Unresolved" />
+      <ReviewOptionTab
+        options={[["map", "Map to private asset"], ["reject", "Reject trade"]] as ["map" | "reject", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "map" && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-semibold text-slate-500">Active assets under {item.broker}</p>
+          {brokerAssets.length > 0 ? (
+            <div className="space-y-2">
+              {brokerAssets.map((a) => {
+                const isSelected = selectedAsset === a.privateAssetId;
+                return (
+                  <button key={a.privateAssetId} onClick={() => setSelectedAsset(a.privateAssetId)}
+                    className={`w-full rounded-md border px-3 py-2.5 text-left transition ${isSelected ? "border-sky-500/50 bg-sky-500/10" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-100">{a.name}</span>
+                      <StatusBadge value={a.status} />
+                    </div>
+                    <div className="mt-0.5 flex gap-2 text-[10px] text-slate-500">
+                      <span className="text-sky-400">{a.ticker}</span><span>·</span>
+                      <span>{a.assetClass.replace(/_/g, " ")}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">No active assets for this broker. Create a private asset first.</p>
+          )}
+          <button disabled={!selectedAsset}
+            className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
+            Map {item.ticker} to selected asset & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "reject" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            Inbound trade for ticker <span className="font-mono text-slate-200">{item.ticker}</span> will be rejected and removed from the active queue. This cannot be undone.
+          </div>
+          <button className="h-9 w-full rounded-md border border-rose-400/30 bg-rose-400/10 text-xs font-semibold text-rose-300 transition hover:bg-rose-400/15">
+            Reject inbound trade
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MissingUserPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"link" | "clear">("link");
+  const [selectedPerson, setSelectedPerson] = useState("");
+
+  const activePersons = householdPersons.filter((p) => p.status === "active");
+  const isEmail = item.userId?.includes("@");
+
+  return (
+    <div>
+      <ReceivedBadge
+        label={isEmail ? "Investor email from broker — no PATS match" : "Investor code from broker — no PATS match"}
+        value={item.userId ?? "—"}
+        note="Not found"
+      />
+      <ReviewOptionTab
+        options={[["link", "Link to existing contact"], ["clear", "Clear reference"]] as ["link" | "clear", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "link" && (
+        <div className="space-y-3">
+          <label className="block text-[10px] font-semibold text-slate-500">Select PATS contact</label>
+          <div className="max-h-52 space-y-2 overflow-y-auto pr-0.5">
+            {activePersons.map((p) => {
+              const name = p.firstName ? `${p.firstName} ${p.lastName}` : (p.entityName ?? "—");
+              const hh = households.find((h) => h.householdId === p.householdId);
+              const isSelected = selectedPerson === p.personId;
+              return (
+                <button key={p.personId} onClick={() => setSelectedPerson(p.personId)}
+                  className={`w-full rounded-md border px-3 py-2.5 text-left transition ${isSelected ? "border-sky-500/50 bg-sky-500/10" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-100">{name}</span>
+                    <StatusBadge value={p.entityType} />
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">{hh?.name} · {p.email}</div>
+                </button>
+              );
+            })}
+          </div>
+          <button disabled={!selectedPerson}
+            className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
+            Link investor & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "clear" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            The investor reference <span className="text-slate-200">{item.userId}</span> will be cleared. The trade will continue without an assigned investor — Ops must verify disposition before routing to execution.
+          </div>
+          <button className="h-9 w-full rounded-md border border-amber-400/30 bg-amber-400/10 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/15">
+            Clear investor & reprocess trade
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BrokerMismatchPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"move_ticker" | "open_asset">("move_ticker");
+  const assetObj = assets.find((a) => a.ticker === item.ticker);
+
+  return (
+    <div>
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-amber-300">Ticker broker</p>
+          <p className="mt-0.5 text-xs text-amber-100">{item.broker}</p>
+        </div>
+        <div className="rounded-md border border-rose-400/20 bg-rose-400/10 px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-rose-300">Asset owner</p>
+          <p className="mt-0.5 text-xs text-rose-100">{assetObj?.broker ?? "Goldman Sachs Advisor Solutions"}</p>
+        </div>
+      </div>
+      <ReviewOptionTab
+        options={[["move_ticker", "Move ticker to asset's broker"], ["open_asset", "Open asset profile"]] as ["move_ticker" | "open_asset", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "move_ticker" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            Ticker <span className="font-mono text-slate-200">{item.ticker}</span> will be re-scoped from <span className="text-slate-300">{item.broker}</span> to <span className="text-slate-300">{assetObj?.broker ?? "the asset owner"}</span>. The trade will be reprocessed after the move.
+          </div>
+          <button className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400">
+            Move ticker to {assetObj?.broker ?? "asset's broker"} & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "open_asset" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-3 text-xs">
+            <div className="grid grid-cols-2 gap-y-2">
+              <span className="text-slate-500">Asset</span><span className="text-slate-100">{item.privateAsset}</span>
+              <span className="text-slate-500">Ticker</span><span className="font-mono text-sky-300">{item.ticker}</span>
+              <span className="text-slate-500">Owner broker</span><span className="text-slate-100">{assetObj?.broker ?? "—"}</span>
+              <span className="text-slate-500">Status</span><span><StatusBadge value={assetObj?.status ?? "unknown"} /></span>
+            </div>
+          </div>
+          <button className="h-9 w-full rounded-md border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 transition hover:border-slate-600">
+            Open asset profile →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InactiveAssetPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"reactivate" | "hold">("reactivate");
+  const assetObj = assets.find((a) => a.ticker === item.ticker);
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+          <div>
+            <p className="text-[10px] font-semibold text-amber-300">Asset status</p>
+            <p className="mt-0.5 text-xs text-amber-100">{item.privateAsset}</p>
+          </div>
+        </div>
+        <StatusBadge value={assetObj?.status ?? "restricted"} />
+      </div>
+      <ReviewOptionTab
+        options={[["reactivate", "Reactivate asset"], ["hold", "Hold trade"]] as ["reactivate" | "hold", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "reactivate" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            <span className="text-slate-300">{item.privateAsset}</span> will be set to active. Confirm with the asset sponsor that trading is permitted before reactivating.
+          </div>
+          <button className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400">
+            Reactivate {item.privateAsset} & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "hold" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            The trade will remain in the review queue until the asset is reactivated or a disposition decision is made by Ops.
+          </div>
+          <button className="h-9 w-full rounded-md border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 transition hover:border-slate-600">
+            Hold trade in queue
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkflowErrorPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"retry" | "inspect">("retry");
+  const workflow = workflows.find((w) => w.asset === item.privateAsset);
+
+  return (
+    <div>
+      <div className="mb-4 rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+            <p className="text-[10px] font-semibold text-amber-300">Failed workflow template</p>
+          </div>
+          <StatusBadge value="error" />
+        </div>
+        <p className="mt-1.5 text-xs text-amber-100">{workflow?.name ?? "Template not found"}</p>
+      </div>
+      <ReviewOptionTab
+        options={[["retry", "Retry workflow creation"], ["inspect", "Inspect template"]] as ["retry" | "inspect", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "retry" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            PATS will attempt to create the trade workflow again using template <span className="text-slate-300">{workflow?.name}</span>. All steps and documents will be initialized from the template definition.
+          </div>
+          <button className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400">
+            Retry workflow creation & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "inspect" && (
+        <div className="space-y-3">
+          {workflow ? (
+            <>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-3 text-xs">
+                <div className="grid grid-cols-2 gap-y-2">
+                  <span className="text-slate-500">Template</span><span className="text-slate-100">{workflow.name}</span>
+                  <span className="text-slate-500">Type</span><span className="text-slate-100">{workflow.type}</span>
+                  <span className="text-slate-500">Policy</span><span className="text-slate-100">{workflow.policy}</span>
+                  <span className="text-slate-500">Requirements</span><span className="text-slate-100">{workflow.requirements}</span>
+                  <span className="text-slate-500">Status</span><span><StatusBadge value={workflow.status} /></span>
+                </div>
+              </div>
+              <button className="h-9 w-full rounded-md border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 transition hover:border-slate-600">
+                Open workflow template →
+              </button>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">No matching template found for this asset.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UnknownAssetPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"map" | "create" | "reject">("map");
+  const [selectedAsset, setSelectedAsset] = useState("");
+
+  const allActiveAssets = assets.filter((a) => a.status === "active");
+
+  return (
+    <div>
+      <ReceivedBadge label="Ticker sent by broker — no private asset found" value={`${item.ticker} · ${item.broker}`} note="Unresolved" />
+      <ReviewOptionTab
+        options={[["map", "Map to existing asset"], ["create", "Create new private asset"], ["reject", "Reject trade"]] as ["map" | "create" | "reject", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "map" && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-semibold text-slate-500">Select the PATS private asset this ticker represents</p>
+          <div className="max-h-52 space-y-2 overflow-y-auto pr-0.5">
+            {allActiveAssets.map((a) => {
+              const isSelected = selectedAsset === a.privateAssetId;
+              return (
+                <button key={a.privateAssetId} onClick={() => setSelectedAsset(a.privateAssetId)}
+                  className={`w-full rounded-md border px-3 py-2.5 text-left transition ${isSelected ? "border-sky-500/50 bg-sky-500/10" : "border-slate-800 bg-slate-950/40 hover:border-slate-700"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-100">{a.name}</span>
+                    <StatusBadge value={a.status} />
+                  </div>
+                  <div className="mt-0.5 flex gap-2 text-[10px] text-slate-500">
+                    <span className="text-sky-400">{a.ticker}</span><span>·</span>
+                    <span>{a.broker}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button disabled={!selectedAsset}
+            className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
+            Map {item.ticker} to selected asset & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "create" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            You will be taken to the Private Assets section to create a new asset record for ticker <span className="font-mono text-slate-200">{item.ticker}</span> under <span className="text-slate-300">{item.broker}</span>. Once created, return here to reprocess the trade.
+          </div>
+          <button className="h-9 w-full rounded-md border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 transition hover:border-slate-600">
+            Go to Private Assets → create {item.ticker}
+          </button>
+        </div>
+      )}
+      {mode === "reject" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            The inbound trade for <span className="font-mono text-slate-200">{item.ticker}</span> from <span className="text-slate-300">{item.broker}</span> will be rejected and removed from the queue. This action cannot be undone.
+          </div>
+          <button className="h-9 w-full rounded-md border border-rose-400/30 bg-rose-400/10 text-xs font-semibold text-rose-300 transition hover:bg-rose-400/15">
+            Reject inbound trade
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EligibilityErrorPanel({ item }: { item: TradeReviewCase }) {
+  const [mode, setMode] = useState<"mark_eligible" | "create_workflow" | "retry">("mark_eligible");
+
+  const accountObj = householdAccounts.find((a) => a.accountId === item.accountId);
+  const accountHh = households.find((h) => h.householdId === accountObj?.householdId);
+  const assetObj = assets.find((a) => a.ticker === item.ticker);
+  const workflowTemplate = workflows.find((w) => w.asset === item.privateAsset);
+
+  return (
+    <div>
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-slate-500">Investor</p>
+          <p className="mt-0.5 truncate text-xs text-slate-100">{item.userId ?? "Not assigned"}</p>
+        </div>
+        <div className="rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-amber-300">Eligibility status</p>
+          <p className="mt-0.5 text-xs text-amber-100">Check failed</p>
+        </div>
+        {accountObj && (
+          <div className="col-span-2 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2.5">
+            <p className="text-[10px] font-semibold text-slate-500">Account</p>
+            <p className="mt-0.5 text-xs text-slate-100">{accountObj.accountNumber} · {accountHh?.name}</p>
+          </div>
+        )}
+      </div>
+      <ReviewOptionTab
+        options={[["mark_eligible", "Mark eligible manually"], ["create_workflow", "Route to workflow"], ["retry", "Retry check"]] as ["mark_eligible" | "create_workflow" | "retry", string][]}
+        value={mode} onChange={setMode}
+      />
+      {mode === "mark_eligible" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            The investor will be manually marked as eligible for <span className="text-slate-300">{item.privateAsset}</span>. This bypasses the automated eligibility check and logs the Ops override. Confirm this is appropriate before proceeding.
+          </div>
+          <button className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400">
+            Mark eligible & reprocess trade
+          </button>
+        </div>
+      )}
+      {mode === "create_workflow" && (
+        <div className="space-y-3">
+          {workflowTemplate ? (
+            <>
+              <div className="rounded-md border border-slate-800 bg-slate-950/35 px-3 py-3 text-xs">
+                <p className="mb-2 text-[10px] font-semibold text-slate-500">Workflow that will be created</p>
+                <div className="grid grid-cols-2 gap-y-2">
+                  <span className="text-slate-500">Template</span><span className="text-slate-100">{workflowTemplate.name}</span>
+                  <span className="text-slate-500">Type</span><span className="text-slate-100">{workflowTemplate.type}</span>
+                  <span className="text-slate-500">Policy</span><span className="text-slate-100">{workflowTemplate.policy}</span>
+                  <span className="text-slate-500">Requirements</span><span className="text-slate-100">{workflowTemplate.requirements}</span>
+                </div>
+              </div>
+              <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+                A trade workflow will be created directly, skipping the eligibility check. The investor will need to complete all workflow requirements before the trade routes to execution.
+              </div>
+              <button className="h-9 w-full rounded-md bg-sky-500 text-xs font-semibold text-white transition hover:bg-sky-400">
+                Create workflow & reprocess trade
+              </button>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">No workflow template found for {item.privateAsset}. Create one in the Workflows section first.</p>
+          )}
+        </div>
+      )}
+      {mode === "retry" && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-xs leading-5 text-slate-400">
+            PATS will re-run the eligibility check for <span className="text-slate-300">{item.userId ?? "this investor"}</span> against <span className="text-slate-300">{item.privateAsset}</span>. If the check passes this time, the trade will continue automatically.
+          </div>
+          <button className="h-9 w-full rounded-md border border-sky-500/40 bg-sky-500/10 text-xs font-semibold text-sky-300 transition hover:bg-sky-500/15">
+            Retry eligibility check & reprocess trade
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
