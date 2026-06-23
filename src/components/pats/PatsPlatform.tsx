@@ -45,6 +45,7 @@ type NavKey =
   | "dashboard"
   | "trades"
   | "externalTrades"
+  | "review"
   | "brokers"
   | "assets"
   | "workflows"
@@ -223,6 +224,43 @@ interface UserAccessRequest {
   scopeLabel: string;
   lastActivity: string;
   notes: string;
+}
+
+type ReviewStatus = "unresolved" | "needs_review";
+type ReviewReason =
+  | "missing_broker_ticker"
+  | "unknown_private_asset"
+  | "invalid_account"
+  | "inactive_account"
+  | "broker_asset_mismatch"
+  | "inactive_private_asset"
+  | "missing_user"
+  | "eligibility_error"
+  | "workflow_creation_error";
+
+interface TradeReviewCase {
+  reviewId: string;
+  inboundTradeId: string;
+  vantageTradeId: string;
+  status: ReviewStatus;
+  reason: ReviewReason;
+  priority: "High" | "Medium" | "Low";
+  receivedAt: string;
+  source: "Vantage API" | "Manual";
+  broker: string;
+  vantageBrokerId: string;
+  ticker: string;
+  privateAsset: string;
+  side: string;
+  quantity: string;
+  amount: string;
+  accountId?: string;
+  userId?: string;
+  diagnosis: string;
+  resolution: string;
+  primaryAction: string;
+  secondaryAction?: string;
+  payload: Array<[string, string]>;
 }
 
 interface ExecutionFill {
@@ -407,7 +445,7 @@ interface RolePermissionDefinition {
 const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
   pats_ops: {
     summary: "Internal operations role with global visibility and administration controls.",
-    nav: ["dashboard", "trades", "externalTrades", "brokers", "assets", "workflows", "documents", "households", "execution", "integrations", "userAccess", "activity", "alerts", "settings"],
+    nav: ["dashboard", "trades", "externalTrades", "review", "brokers", "assets", "workflows", "documents", "households", "execution", "integrations", "userAccess", "activity", "alerts", "settings"],
     dashboard: "Full operations overview",
     documents: "All documents",
     documentCreation: "Allowed",
@@ -573,6 +611,146 @@ const externalTrades = [
   { externalId: "vt_no_eligibility_001", inboundTradeId: "it_d672e1c1", source: "Vantage API", vantageBrokerId: "176f7a13d62244845b746b04c79fa621", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", brokerScopedTickerId: "bst_tech_a_gsas", broker: "Goldman Sachs Advisor Solutions", ticker: "TECH-A", asset: "TechCorp Series A", validation: "workflow_required", execution: "no_eligibility", received: "8 min ago" },
   { externalId: "vt_every_trade_001", inboundTradeId: "it_cb41f317", source: "Vantage API", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", brokerScopedTickerId: "bst_health_b_ms", broker: "Morgan Stanley Alternatives", ticker: "HEALTH-B", asset: "HealthTech Preferred", validation: "workflow_required", execution: "every_trade", received: "21 min ago" },
   { externalId: "vt_unresolved_001", inboundTradeId: "it_a418e890", source: "Vantage API", vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549", patsBrokerProfileId: "-", privateAssetId: "-", brokerScopedTickerId: "-", broker: "Morgan Stanley Alternatives", ticker: "DOES-NOT-EXIST", asset: "Not resolved", validation: "unresolved", execution: "unresolved", received: "44 min ago" },
+];
+
+const tradeReviewCases: TradeReviewCase[] = [
+  {
+    reviewId: "rev_account_001",
+    inboundTradeId: "it_00d9115f",
+    vantageTradeId: "8e77290ac393d1f1ae1f8631e064b889",
+    status: "needs_review",
+    reason: "invalid_account",
+    priority: "High",
+    receivedAt: "11:12 AM",
+    source: "Vantage API",
+    broker: "B Riley",
+    vantageBrokerId: "240a05cdff561717446a56d9580c13e5",
+    ticker: "FCP",
+    privateAsset: "Fondo de Capital Privado I",
+    side: "Buy",
+    quantity: "1,000",
+    amount: "-",
+    accountId: "gs-ecef",
+    userId: "luisa.perez@bblabs.io",
+    diagnosis: "Vantage sent an account code that is not a PATS account id. PATS account ids must resolve to an active household account.",
+    resolution: "Attach the trade to an existing PATS account or leave account unassigned and continue with Ops review.",
+    primaryAction: "Assign PATS account",
+    secondaryAction: "Clear Vantage account",
+    payload: [["accountId", "gs-ecef"], ["expected", "acc_..."], ["status trigger", "account not found"]],
+  },
+  {
+    reviewId: "rev_ticker_001",
+    inboundTradeId: "it_a418e890",
+    vantageTradeId: "vt_unresolved_001",
+    status: "unresolved",
+    reason: "missing_broker_ticker",
+    priority: "High",
+    receivedAt: "10:05 AM",
+    source: "Vantage API",
+    broker: "Morgan Stanley Alternatives",
+    vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549",
+    ticker: "DOES-NOT-EXIST",
+    privateAsset: "Not resolved",
+    side: "Buy",
+    quantity: "10,000",
+    amount: "-",
+    diagnosis: "No broker-scoped ticker exists for this Vantage broker and ticker combination.",
+    resolution: "Create a broker ticker mapping to an active private asset, then reprocess the inbound trade.",
+    primaryAction: "Map broker ticker",
+    secondaryAction: "Reject inbound trade",
+    payload: [["vantageBrokerId", "35dc8d0f6703e35a81dac3912ec3b549"], ["ticker", "DOES-NOT-EXIST"], ["status trigger", "NotFoundError"]],
+  },
+  {
+    reviewId: "rev_asset_001",
+    inboundTradeId: "it_a71e6d82",
+    vantageTradeId: "vt_needs_review_001",
+    status: "needs_review",
+    reason: "inactive_private_asset",
+    priority: "Medium",
+    receivedAt: "9:58 AM",
+    source: "Vantage API",
+    broker: "JP Morgan Private Markets",
+    vantageBrokerId: "cb2a2ee8e52d0c54e3af17fc32bb84c9",
+    ticker: "ENERGY-C",
+    privateAsset: "CleanEnergy Fund",
+    side: "Buy",
+    quantity: "-",
+    amount: "$1,380,000",
+    accountId: "acc_003",
+    diagnosis: "The ticker resolved, but the private asset is restricted or inactive.",
+    resolution: "Reactivate the private asset if trading is allowed, or keep the trade blocked for Ops disposition.",
+    primaryAction: "Review asset status",
+    secondaryAction: "Hold trade",
+    payload: [["privateAssetId", "pa_energy_c"], ["asset status", "restricted"], ["status trigger", "privateAsset.status !== active"]],
+  },
+  {
+    reviewId: "rev_mismatch_001",
+    inboundTradeId: "it_broker_mismatch",
+    vantageTradeId: "vt_broker_mismatch_001",
+    status: "needs_review",
+    reason: "broker_asset_mismatch",
+    priority: "High",
+    receivedAt: "9:41 AM",
+    source: "Vantage API",
+    broker: "Schwab Alternative Investments",
+    vantageBrokerId: "b45e6cb2154b4d8e865005c7f1d401cc",
+    ticker: "TECH-A",
+    privateAsset: "TechCorp Series A",
+    side: "Subscribe",
+    quantity: "5,000",
+    amount: "-",
+    diagnosis: "The broker ticker points to a broker profile that does not match the private asset owner.",
+    resolution: "Correct the broker-scoped ticker or move the private asset to the expected broker profile.",
+    primaryAction: "Fix broker mapping",
+    secondaryAction: "Open asset profile",
+    payload: [["ticker broker", "pbp_schwab"], ["asset broker", "pbp_gsas"], ["status trigger", "broker profile mismatch"]],
+  },
+  {
+    reviewId: "rev_user_001",
+    inboundTradeId: "it_user_lookup",
+    vantageTradeId: "vt_user_lookup_001",
+    status: "needs_review",
+    reason: "missing_user",
+    priority: "Medium",
+    receivedAt: "9:20 AM",
+    source: "Vantage API",
+    broker: "Goldman Sachs Advisor Solutions",
+    vantageBrokerId: "176f7a13d62244845b746b04c79fa621",
+    ticker: "TECH-A",
+    privateAsset: "TechCorp Series A",
+    side: "Buy",
+    quantity: "2,500",
+    amount: "-",
+    userId: "external-user-441",
+    diagnosis: "The trade references a user that PATS cannot hydrate from Cognito or contact context.",
+    resolution: "Link the external user to a PATS contact, or keep the trade unassigned.",
+    primaryAction: "Link contact",
+    secondaryAction: "Clear user",
+    payload: [["userId", "external-user-441"], ["lookup", "Cognito user not found"], ["status trigger", "identity hydration failed"]],
+  },
+  {
+    reviewId: "rev_workflow_001",
+    inboundTradeId: "it_workflow_error",
+    vantageTradeId: "vt_workflow_error_001",
+    status: "needs_review",
+    reason: "workflow_creation_error",
+    priority: "High",
+    receivedAt: "8:54 AM",
+    source: "Vantage API",
+    broker: "iCapital Marketplace",
+    vantageBrokerId: "8a4c01a23b574ab5a8c11225efcd2299",
+    ticker: "FINTECH-D",
+    privateAsset: "FinTech Growth",
+    side: "Subscribe",
+    quantity: "7,500",
+    amount: "$1,580,625",
+    accountId: "acc_004",
+    diagnosis: "Eligibility required a workflow, but workflow creation failed before all steps/documents were saved.",
+    resolution: "Retry workflow creation after checking template, requirements, and document repository health.",
+    primaryAction: "Retry workflow",
+    secondaryAction: "Inspect template",
+    payload: [["workflowTemplateId", "wt_fintech_subscription"], ["document source", "iCapital"], ["status trigger", "workflow save failed"]],
+  },
 ];
 
 const executionFlows: ExecutionFlowRecord[] = [
@@ -917,6 +1095,7 @@ const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ 
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "trades", label: "PATS Blotter", icon: ArrowLeftRight },
   { key: "externalTrades", label: "Inbound Blotter", icon: Database },
+  { key: "review", label: "Review Center", icon: Shield },
   { key: "brokers", label: "Asset Brokers", icon: Building2 },
   { key: "assets", label: "Private Assets", icon: Briefcase },
   { key: "workflows", label: "Workflows", icon: ListChecks },
@@ -1169,7 +1348,7 @@ function Dashboard({ role, onSelect }: { role: AccessRole; onSelect: (key: NavKe
   const workflowRequiredCount = trades.filter((trade) => trade.status === "workflow_required").length;
   const readyCount = trades.filter((trade) => trade.status === "validated").length;
   const exceptionCount = trades.filter((trade) => trade.status === "unresolved" || trade.status === "needs_review").length;
-  const tradeReviewTarget: NavKey = roleCanAccessNav(role, "externalTrades") ? "externalTrades" : roleCanAccessNav(role, "trades") ? "trades" : "documents";
+  const tradeReviewTarget: NavKey = roleCanAccessNav(role, "review") ? "review" : roleCanAccessNav(role, "externalTrades") ? "externalTrades" : roleCanAccessNav(role, "trades") ? "trades" : "documents";
   const canOpenIntegrations = roleCanAccessNav(role, "integrations");
   const integrationsActionLabel = rolePermissions[role].canManageIntegrations ? "Manage" : "View";
   const queueRows = trades.slice(0, 4).map((trade) => ({
@@ -1499,6 +1678,188 @@ function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
         </div>
       </ShellCard>
     </>
+  );
+}
+
+function reviewReasonLabel(reason: ReviewReason) {
+  const labels: Record<ReviewReason, string> = {
+    missing_broker_ticker: "Missing broker ticker",
+    unknown_private_asset: "Unknown private asset",
+    invalid_account: "Invalid account",
+    inactive_account: "Inactive account",
+    broker_asset_mismatch: "Broker asset mismatch",
+    inactive_private_asset: "Inactive private asset",
+    missing_user: "Missing user",
+    eligibility_error: "Eligibility error",
+    workflow_creation_error: "Workflow creation error",
+  };
+  return labels[reason];
+}
+
+function reviewActionHint(reason: ReviewReason) {
+  const hints: Record<ReviewReason, string> = {
+    missing_broker_ticker: "Create or update the broker-scoped ticker mapping, then reprocess.",
+    unknown_private_asset: "Create the private asset reference or attach the ticker to an existing asset.",
+    invalid_account: "Assign an active PATS account or clear the external account before continuing.",
+    inactive_account: "Reactivate the account or choose another household account.",
+    broker_asset_mismatch: "Align the broker ticker mapping with the private asset owner.",
+    inactive_private_asset: "Review the asset status before the trade can continue.",
+    missing_user: "Link the external user to a PATS contact or leave the investor unassigned.",
+    eligibility_error: "Retry the eligibility check after correcting account/user context.",
+    workflow_creation_error: "Retry workflow creation after checking the template and document setup.",
+  };
+  return hints[reason];
+}
+
+function ReviewCenter({ role }: { role: AccessRole }) {
+  const [statusFilter, setStatusFilter] = useState<"all" | ReviewStatus>("all");
+  const [reasonFilter, setReasonFilter] = useState<"all" | ReviewReason>("all");
+  const [selectedCase, setSelectedCase] = useState<TradeReviewCase | null>(null);
+
+  const cases = tradeReviewCases;
+  const filtered = cases.filter((item) => {
+    if (statusFilter !== "all" && item.status !== statusFilter) return false;
+    if (reasonFilter !== "all" && item.reason !== reasonFilter) return false;
+    return true;
+  });
+  const unresolvedCount = cases.filter((item) => item.status === "unresolved").length;
+  const needsReviewCount = cases.filter((item) => item.status === "needs_review").length;
+  const highPriorityCount = cases.filter((item) => item.priority === "High").length;
+  const reasonOptions = Array.from(new Set(cases.map((item) => item.reason)));
+
+  if (role !== "pats_ops") {
+    return <ReadOnlyNotice label="Review Center is reserved for PATS Ops because it can change mappings, account assignment, and trade disposition." />;
+  }
+
+  return (
+    <>
+      <PageTitle title="Review Center" subtitle="Resolve unresolved and needs review trades before they continue to workflow or execution" />
+      <div className="mb-5 grid grid-cols-4 gap-4">
+        <MetricCard label="Open review cases" value={cases.length.toString()} delta="ops queue" />
+        <MetricCard label="Unresolved" value={unresolvedCount.toString()} delta="mapping needed" />
+        <MetricCard label="Needs review" value={needsReviewCount.toString()} delta="manual decision" />
+        <MetricCard label="High priority" value={highPriorityCount.toString()} delta="same day" />
+      </div>
+      <ShellCard className="mb-5 p-4">
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            ["Intake match", "Broker + ticker must resolve to an active broker-scoped private asset."],
+            ["Investor context", "Optional user/account values must map to PATS records before they are trusted."],
+            ["Workflow recovery", "Eligibility and workflow errors can be retried once the blocking data is corrected."],
+          ].map(([title, copy]) => (
+            <div key={title} className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
+              <p className="text-xs font-semibold text-slate-100">{title}</p>
+              <p className="mt-1.5 text-[11px] leading-4 text-slate-500">{copy}</p>
+            </div>
+          ))}
+        </div>
+      </ShellCard>
+      <Toolbar placeholder="Search inbound id, Vantage id, broker, ticker, account, or reason...">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | ReviewStatus)} className="h-9 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 outline-none">
+          <option value="all">All statuses</option>
+          <option value="unresolved">Unresolved</option>
+          <option value="needs_review">Needs review</option>
+        </select>
+        <select value={reasonFilter} onChange={(e) => setReasonFilter(e.target.value as "all" | ReviewReason)} className="h-9 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 outline-none">
+          <option value="all">All reasons</option>
+          {reasonOptions.map((reason) => <option key={reason} value={reason}>{reviewReasonLabel(reason)}</option>)}
+        </select>
+      </Toolbar>
+      <ShellCard className="overflow-hidden">
+        <div className="grid grid-cols-[0.9fr_1fr_0.9fr_1.2fr_1.2fr_1fr_0.9fr_0.65fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
+          <span>Status</span><span>Reason</span><span>Trade</span><span>Broker</span><span>Asset / ticker</span><span>Account / user</span><span>Received</span><span />
+        </div>
+        <div className="divide-y divide-slate-800/80">
+          {filtered.map((item) => (
+            <button key={item.reviewId} onClick={() => setSelectedCase(item)} className="grid w-full grid-cols-[0.9fr_1fr_0.9fr_1.2fr_1.2fr_1fr_0.9fr_0.65fr] items-center px-5 py-3.5 text-left transition hover:bg-slate-900/65">
+              <span><StatusBadge value={item.status} /></span>
+              <span>
+                <span className="block text-xs font-semibold text-slate-100">{reviewReasonLabel(item.reason)}</span>
+                <span className="mt-0.5 block text-[10px] text-slate-500">{item.priority} priority</span>
+              </span>
+              <span>
+                <span className="block text-xs font-semibold text-sky-300">{item.inboundTradeId}</span>
+                <span className="mt-0.5 block max-w-[130px] truncate text-[10px] text-slate-500">{item.vantageTradeId}</span>
+              </span>
+              <span>
+                <span className="block text-xs text-slate-300">{item.broker}</span>
+                <span className="mt-0.5 block max-w-[150px] truncate text-[10px] text-slate-500">{item.vantageBrokerId}</span>
+              </span>
+              <span>
+                <span className="block text-xs font-semibold text-slate-100">{item.privateAsset}</span>
+                <span className="mt-0.5 block text-[10px] text-sky-300">{item.ticker}</span>
+              </span>
+              <span className="text-[11px] text-slate-400">{item.accountId ?? item.userId ?? "Not assigned"}</span>
+              <span className="text-xs text-slate-500">{item.receivedAt}</span>
+              <span className="text-right text-xs font-semibold text-sky-300">{item.primaryAction}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && <p className="px-5 py-6 text-xs text-slate-500">No review cases match the current filters.</p>}
+        </div>
+      </ShellCard>
+      {selectedCase && <ReviewCaseDetails item={selectedCase} onClose={() => setSelectedCase(null)} />}
+    </>
+  );
+}
+
+function ReviewCaseDetails({ item, onClose }: { item: TradeReviewCase; onClose: () => void }) {
+  return (
+    <DetailPanel title={reviewReasonLabel(item.reason)} subtitle={`${item.ticker} · ${item.broker}`} onClose={onClose}>
+      <ShellCard className="mb-5 p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">Review state</p>
+            <div className="mt-3 flex items-center gap-2">
+              <StatusBadge value={item.status} />
+              <StatusBadge value={item.priority} />
+            </div>
+          </div>
+          <span className="rounded-md border border-slate-800 bg-slate-950/45 px-2 py-1 text-[10px] font-semibold text-slate-400">{item.source}</span>
+        </div>
+      </ShellCard>
+      <ShellCard className="mb-5 p-5">
+        <h3 className="text-sm font-semibold text-white">Trade context</h3>
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <Info label="Inbound trade" value={item.inboundTradeId} />
+          <Info label="Vantage trade" value={item.vantageTradeId} />
+          <Info label="Broker" value={item.broker} />
+          <Info label="Vantage broker id" value={item.vantageBrokerId} />
+          <Info label="Ticker" value={item.ticker} />
+          <Info label="Private asset" value={item.privateAsset} />
+          <Info label="Side" value={item.side} />
+          <Info label="Quantity / amount" value={`${item.quantity} / ${item.amount}`} />
+          <Info label="Account" value={item.accountId ?? "Not assigned"} />
+          <Info label="User" value={item.userId ?? "Not assigned"} />
+        </div>
+      </ShellCard>
+      <ShellCard className="mb-5 p-5">
+        <h3 className="text-sm font-semibold text-white">Diagnosis</h3>
+        <p className="mt-3 text-sm leading-6 text-slate-300">{item.diagnosis}</p>
+        <div className="mt-4 rounded-md border border-sky-400/20 bg-sky-400/10 p-3">
+          <p className="text-xs font-semibold text-sky-200">{item.resolution}</p>
+          <p className="mt-1.5 text-[11px] text-sky-100/70">{reviewActionHint(item.reason)}</p>
+        </div>
+      </ShellCard>
+      <ShellCard className="mb-5 p-5">
+        <h3 className="text-sm font-semibold text-white">Blocking payload</h3>
+        <div className="mt-4 space-y-2">
+          {item.payload.map(([label, value]) => (
+            <div key={label} className="grid grid-cols-[0.8fr_1.2fr] rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2 text-xs">
+              <span className="font-semibold text-slate-500">{label}</span>
+              <span className="truncate text-slate-200">{value}</span>
+            </div>
+          ))}
+        </div>
+      </ShellCard>
+      <ShellCard className="p-5">
+        <h3 className="text-sm font-semibold text-white">Ops resolution</h3>
+        <div className="mt-4 grid gap-3">
+          <button className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white">{item.primaryAction}</button>
+          {item.secondaryAction && <button className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">{item.secondaryAction}</button>}
+          <button className="h-9 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-xs font-semibold text-emerald-300">Reprocess inbound trade</button>
+        </div>
+      </ShellCard>
+    </DetailPanel>
   );
 }
 
@@ -4652,6 +5013,7 @@ export default function PatsPlatform() {
           {active === "dashboard" && <Dashboard role={activeRole} onSelect={selectNav} />}
           {active === "trades" && <Trades trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
           {active === "externalTrades" && <ExternalTrades openItem={setSelectedExternal} />}
+          {active === "review" && <ReviewCenter role={activeRole} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets />}
           {active === "workflows" && <Workflows workflows={localWorkflows} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
