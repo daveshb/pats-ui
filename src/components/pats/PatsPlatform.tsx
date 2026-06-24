@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import {
-  Activity,
-  AlertTriangle,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
+  AlertTriangle,
   Bell,
   Briefcase,
   Building2,
@@ -14,14 +13,11 @@ import {
   ChevronDown,
   ChevronRight,
   Clock3,
-  Database,
   Download,
   FileText,
   Filter,
-  KeyRound,
   LayoutDashboard,
   ListChecks,
-  Plug,
   Plus,
   Route,
   Search,
@@ -44,7 +40,6 @@ function saveLocal<T>(key: string, value: T) {
 type NavKey =
   | "dashboard"
   | "trades"
-  | "externalTrades"
   | "review"
   | "brokers"
   | "assets"
@@ -52,10 +47,7 @@ type NavKey =
   | "documents"
   | "households"
   | "execution"
-  | "integrations"
   | "userAccess"
-  | "activity"
-  | "alerts"
   | "settings";
 
 type StatusTone = "green" | "yellow" | "red" | "blue" | "gray" | "purple";
@@ -438,14 +430,13 @@ interface RolePermissionDefinition {
   canManageWorkflows: boolean;
   canManageHouseholds: boolean;
   canOperateExecution: boolean;
-  canManageIntegrations: boolean;
   canAdministerRoles: boolean;
 }
 
 const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
   pats_ops: {
     summary: "Internal operations role with global visibility and administration controls.",
-    nav: ["dashboard", "trades", "externalTrades", "review", "brokers", "assets", "workflows", "documents", "households", "execution", "integrations", "userAccess", "activity", "alerts", "settings"],
+    nav: ["dashboard", "trades", "review", "brokers", "assets", "workflows", "documents", "households", "execution", "userAccess", "settings"],
     dashboard: "Full operations overview",
     documents: "All documents",
     documentCreation: "Allowed",
@@ -464,12 +455,11 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     canManageWorkflows: true,
     canManageHouseholds: true,
     canOperateExecution: true,
-    canManageIntegrations: true,
     canAdministerRoles: true,
   },
   broker: {
     summary: "Broker team role for scoped private asset operations and document preparation.",
-    nav: ["dashboard", "trades", "externalTrades", "brokers", "assets", "workflows", "documents", "households", "execution", "activity", "alerts"],
+    nav: ["dashboard", "trades", "brokers", "assets", "workflows", "documents", "households", "execution"],
     dashboard: "Broker scoped overview",
     documents: "Scoped documents",
     documentCreation: "Allowed",
@@ -488,12 +478,11 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     canManageWorkflows: false,
     canManageHouseholds: false,
     canOperateExecution: false,
-    canManageIntegrations: false,
     canAdministerRoles: false,
   },
   wealth_manager: {
     summary: "Advisor visibility role for client status, documents, and assigned households.",
-    nav: ["dashboard", "trades", "assets", "workflows", "documents", "households", "activity"],
+    nav: ["dashboard", "trades", "assets", "workflows", "documents", "households"],
     dashboard: "Advisor scoped overview",
     documents: "View documents",
     documentCreation: "Hidden",
@@ -512,12 +501,11 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     canManageWorkflows: false,
     canManageHouseholds: false,
     canOperateExecution: false,
-    canManageIntegrations: false,
     canAdministerRoles: false,
   },
   client_signer: {
     summary: "Client signing role focused on personal documents and associated profile data.",
-    nav: ["dashboard", "documents", "households", "activity"],
+    nav: ["dashboard", "documents", "households"],
     dashboard: "Simple personal overview",
     documents: "Own documents",
     documentCreation: "Hidden",
@@ -536,12 +524,11 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     canManageWorkflows: false,
     canManageHouseholds: false,
     canOperateExecution: false,
-    canManageIntegrations: false,
     canAdministerRoles: false,
   },
   asset_sponsor: {
     summary: "Sponsor role for assigned private assets and sponsor document review.",
-    nav: ["dashboard", "assets", "documents", "workflows", "activity"],
+    nav: ["dashboard", "assets", "documents", "workflows"],
     dashboard: "Sponsor scoped overview",
     documents: "Asset related documents",
     documentCreation: "Hidden",
@@ -560,12 +547,11 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     canManageWorkflows: false,
     canManageHouseholds: false,
     canOperateExecution: false,
-    canManageIntegrations: false,
     canAdministerRoles: false,
   },
   external_platform: {
-    summary: "Integration user for limited document operations and technical handoffs.",
-    nav: ["dashboard", "externalTrades", "documents", "execution", "integrations", "activity"],
+    summary: "External platform user for limited document operations and technical handoffs.",
+    nav: ["dashboard", "trades", "documents", "execution"],
     dashboard: "Technical integration overview",
     documents: "Platform documents",
     documentCreation: "Hidden",
@@ -584,7 +570,6 @@ const rolePermissions: Record<AccessRole, RolePermissionDefinition> = {
     canManageWorkflows: false,
     canManageHouseholds: false,
     canOperateExecution: false,
-    canManageIntegrations: false,
     canAdministerRoles: false,
   },
 };
@@ -916,25 +901,6 @@ const executionFlows: ExecutionFlowRecord[] = [
 
 const executionSteps = ["Inbound trade", "Asset resolved", "Workflow done", "Execution created", "Fill confirmed", "Return closed"];
 
-const activityEvents = [
-  "InboundTrade received from Vantage API",
-  "Ticker TECH-A matched to a private asset",
-  "BrokerScopedTicker matched bst_tech_a_gsas",
-  "PrivateAsset pa_tech_a selected",
-  "WorkflowTemplate wt_tech_subscription loaded",
-  "Eligibility check returned already_eligible",
-  "InboundTrade status changed to validated",
-  "TradeWorkflow created for user without eligibility",
-  "Required workflow step completed by Ops",
-];
-
-const alerts = [
-  { severity: "High", entity: "it_a418e890", issue: "Ticker could not be resolved", status: "Open", owner: "Operations", created: "21 min ago" },
-  { severity: "Critical", entity: "tws_notice_001", issue: "Required workflow step is blocked", status: "In Review", owner: "Sarah Chen", created: "9 min ago" },
-  { severity: "Medium", entity: "pa_energy_c", issue: "Private asset is restricted and needs review", status: "Open", owner: "Docs Team", created: "1 hour ago" },
-  { severity: "Low", entity: "pbp_legacy", issue: "Broker profile is disconnected", status: "Open", owner: "Integrations", created: "3 hours ago" },
-];
-
 const households: HouseholdRecord[] = [
   { householdId: "hh_001", name: "Chen Family Trust", primaryContactId: "per_001", notes: "Multi-asset family trust with active private equity positions", status: "active", createdAt: "Jan 12, 2026" },
   { householdId: "hh_002", name: "Walsh Capital Group", primaryContactId: "per_003", notes: "Institutional-style family office with multiple accounts", status: "active", createdAt: "Feb 3, 2026" },
@@ -1139,8 +1105,7 @@ function ReadOnlyNotice({ label }: { label: string }) {
 
 const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "trades", label: "PATS Blotter", icon: ArrowLeftRight },
-  { key: "externalTrades", label: "Inbound Blotter", icon: Database },
+  { key: "trades", label: "Trade Blotter", icon: ArrowLeftRight },
   { key: "review", label: "Review Center", icon: Shield },
   { key: "brokers", label: "Asset Brokers", icon: Building2 },
   { key: "assets", label: "Private Assets", icon: Briefcase },
@@ -1148,10 +1113,7 @@ const navItems: Array<{ key: NavKey; label: string; icon: React.ComponentType<{ 
   { key: "documents", label: "Documents", icon: FileText },
   { key: "households", label: "Contacts", icon: Users },
   { key: "execution", label: "Execution Flow", icon: CheckCircle2 },
-  { key: "integrations", label: "Integrations", icon: Plug },
   { key: "userAccess", label: "User Access", icon: Shield },
-  { key: "activity", label: "Activity", icon: Activity },
-  { key: "alerts", label: "Alerts", icon: AlertTriangle },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -1261,7 +1223,6 @@ function Sidebar({ active, role, onSelect }: { active: NavKey; role: AccessRole;
             >
               <Icon className={`h-3.5 w-3.5 ${selected ? "text-sky-300" : "text-slate-500 group-hover:text-slate-300"}`} />
               <span>{item.label}</span>
-              {item.key === "alerts" && <span className="ml-auto rounded-md bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">4</span>}
             </button>
           );
         })}
@@ -1280,7 +1241,267 @@ function Sidebar({ active, role, onSelect }: { active: NavKey; role: AccessRole;
   );
 }
 
-function TopBar({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role: AccessRole) => void }) {
+type NotificationCategory = "all" | "review" | "trade" | "workflow" | "document" | "system";
+type NotificationSeverity = "info" | "warning" | "critical" | "success";
+
+interface NotificationItem {
+  id: string;
+  category: Exclude<NotificationCategory, "all">;
+  title: string;
+  description: string;
+  status: "read" | "unread";
+  severity: NotificationSeverity;
+  timestamp: string;
+  actionRequired: boolean;
+  primaryAction: string;
+  targetNav: NavKey;
+  audience: AccessRole[];
+}
+
+const notifications: NotificationItem[] = [
+  {
+    id: "notif-review-account",
+    category: "review",
+    title: "Trade needs account mapping",
+    description: "FCP from B Riley is waiting for a PATS account assignment.",
+    status: "unread",
+    severity: "warning",
+    timestamp: "2 min ago",
+    actionRequired: true,
+    primaryAction: "Open review case",
+    targetNav: "review",
+    audience: ["pats_ops"],
+  },
+  {
+    id: "notif-workflow-failed",
+    category: "workflow",
+    title: "Workflow retry required",
+    description: "FinTech Growth workflow could not create all required steps.",
+    status: "unread",
+    severity: "critical",
+    timestamp: "8 min ago",
+    actionRequired: true,
+    primaryAction: "Retry workflow",
+    targetNav: "workflows",
+    audience: ["pats_ops"],
+  },
+  {
+    id: "notif-document-signature",
+    category: "document",
+    title: "Signature packet pending",
+    description: "Subscription Agreement is ready for signer action.",
+    status: "unread",
+    severity: "info",
+    timestamp: "14 min ago",
+    actionRequired: true,
+    primaryAction: "Open document",
+    targetNav: "documents",
+    audience: ["pats_ops", "broker", "wealth_manager", "client_signer"],
+  },
+  {
+    id: "notif-trade-ready",
+    category: "trade",
+    title: "Trade ready for execution",
+    description: "TechCorp Series A passed eligibility and workflow checks.",
+    status: "read",
+    severity: "success",
+    timestamp: "42 min ago",
+    actionRequired: false,
+    primaryAction: "Open trade",
+    targetNav: "trades",
+    audience: ["pats_ops", "broker", "wealth_manager"],
+  },
+  {
+    id: "notif-system-maintenance",
+    category: "system",
+    title: "Role permissions updated",
+    description: "User Access rules were refreshed for the current environment.",
+    status: "read",
+    severity: "info",
+    timestamp: "3h ago",
+    actionRequired: false,
+    primaryAction: "View audit",
+    targetNav: "userAccess",
+    audience: ["pats_ops"],
+  },
+];
+
+const notificationCategoryLabels: Record<NotificationCategory, string> = {
+  all: "All",
+  review: "Review",
+  trade: "Trades",
+  workflow: "Workflows",
+  document: "Docs",
+  system: "System",
+};
+
+function notificationIcon(category: NotificationItem["category"]) {
+  const iconClass = "h-3.5 w-3.5";
+  if (category === "review") return <Shield className={iconClass} />;
+  if (category === "trade") return <ListChecks className={iconClass} />;
+  if (category === "workflow") return <Route className={iconClass} />;
+  if (category === "document") return <FileText className={iconClass} />;
+  return <Settings className={iconClass} />;
+}
+
+function notificationTone(severity: NotificationSeverity) {
+  if (severity === "critical") return "border-rose-400/30 bg-rose-400/10 text-rose-300";
+  if (severity === "warning") return "border-amber-400/30 bg-amber-400/10 text-amber-300";
+  if (severity === "success") return "border-emerald-400/30 bg-emerald-400/10 text-emerald-300";
+  return "border-sky-400/30 bg-sky-400/10 text-sky-300";
+}
+
+function NotificationBell({
+  role,
+  open,
+  onOpenChange,
+  onNavigate,
+}: {
+  role: AccessRole;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onNavigate: (key: NavKey) => void;
+}) {
+  const [activeCategory, setActiveCategory] = useState<NotificationCategory>("all");
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const roleNotifications = notifications.filter((item) => item.audience.includes(role) && !deletedIds.includes(item.id));
+  const visibleNotifications = roleNotifications.filter((item) => activeCategory === "all" || item.category === activeCategory);
+  const isUnread = (item: NotificationItem) => item.status === "unread" && !readIds.includes(item.id);
+  const unreadCount = roleNotifications.filter(isUnread).length;
+  const categories = (["all", "review", "trade", "workflow", "document", "system"] as NotificationCategory[])
+    .filter((category) => category === "all" || roleNotifications.some((item) => item.category === category));
+
+  const markAsRead = (id: string) => {
+    setReadIds((current) => current.includes(id) ? current : [...current, id]);
+  };
+
+  const markAllAsRead = () => {
+    setReadIds((current) => Array.from(new Set([...current, ...roleNotifications.map((item) => item.id)])));
+  };
+
+  const deleteNotification = (id: string) => {
+    setDeletedIds((current) => current.includes(id) ? current : [...current, id]);
+    setReadIds((current) => current.filter((readId) => readId !== id));
+  };
+
+  const openNotificationTarget = (item: NotificationItem) => {
+    markAsRead(item.id);
+    onOpenChange(false);
+    onNavigate(item.targetNav);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label={`Open notifications, ${unreadCount} unread`}
+        aria-expanded={open}
+        onClick={() => onOpenChange(!open)}
+        className="relative z-50 flex h-9 w-9 items-center justify-center rounded-md border border-slate-800 bg-[#11151b] text-slate-300 outline-none transition hover:border-sky-400/50 hover:text-sky-200 focus:border-sky-400/70"
+      >
+        <Bell className="h-4 w-4" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#0b0d11] bg-sky-400 px-1 text-[9px] font-bold text-slate-950">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="fixed right-5 top-16 z-[60] w-[430px] overflow-hidden rounded-lg border border-slate-700/90 bg-[#080a0d] shadow-[0_18px_38px_rgba(0,0,0,0.52),0_0_0_1px_rgba(56,189,248,0.08),0_1px_0_rgba(255,255,255,0.04)_inset]">
+          <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Notifications</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">{unreadCount} unread for {accessRoleLabels[role]}</p>
+            </div>
+            <button type="button" onClick={markAllAsRead} className="rounded-md border border-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-sky-400/40 hover:text-sky-200">
+              Mark all read
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-1 border-b border-slate-800 px-3 py-2">
+            {categories.map((category) => {
+              const count = category === "all" ? roleNotifications.length : roleNotifications.filter((item) => item.category === category).length;
+              const selected = activeCategory === category;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setActiveCategory(category)}
+                  className={`flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-[11px] font-semibold transition ${selected ? "bg-sky-400/15 text-sky-200" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"}`}
+                >
+                  <span className="truncate">{notificationCategoryLabels[category]}</span>
+                  <span className={`rounded px-1 text-[9px] ${selected ? "bg-sky-400/20 text-sky-200" : "bg-slate-800 text-slate-500"}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="max-h-[430px] divide-y divide-slate-800/80 overflow-y-auto [scrollbar-color:#334155_#080a0d] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-[#080a0d] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb:hover]:bg-slate-600">
+            {visibleNotifications.map((item) => {
+              const unread = isUnread(item);
+              return (
+                <div key={item.id} className={`grid grid-cols-[28px_1fr] gap-3 px-4 py-3 ${unread ? "bg-sky-400/[0.045]" : "bg-transparent"}`}>
+                  <div className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-md border ${notificationTone(item.severity)}`}>
+                    {notificationIcon(item.category)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {unread && <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />}
+                          <p className={`truncate text-xs ${unread ? "font-semibold text-white" : "font-medium text-slate-300"}`}>{item.title}</p>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{item.description}</p>
+                      </div>
+                      <span className="shrink-0 text-[10px] text-slate-600">{item.timestamp}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <StatusBadge value={notificationCategoryLabels[item.category]} tone="gray" />
+                        {item.actionRequired && <StatusBadge value="action required" tone="yellow" />}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {unread && (
+                          <button type="button" onClick={() => markAsRead(item.id)} className="text-[11px] font-semibold text-slate-400 hover:text-slate-200">
+                            Mark read
+                          </button>
+                        )}
+                        {!unread && (
+                          <button type="button" onClick={() => deleteNotification(item.id)} className="text-[11px] font-semibold text-rose-300 hover:text-rose-200">
+                            Delete
+                          </button>
+                        )}
+                        <button type="button" onClick={() => openNotificationTarget(item)} className="rounded-md border border-slate-800 px-2 py-1 text-[11px] font-semibold text-sky-300 transition hover:border-sky-400/40 hover:bg-sky-400/10">
+                          {item.primaryAction}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {visibleNotifications.length === 0 && (
+              <p className="px-4 py-6 text-center text-xs text-slate-500">No notifications for this category.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopBar({
+  role,
+  onRoleChange,
+  notificationOpen,
+  onNotificationOpenChange,
+  onNavigate,
+}: {
+  role: AccessRole;
+  onRoleChange: (role: AccessRole) => void;
+  notificationOpen: boolean;
+  onNotificationOpenChange: (open: boolean) => void;
+  onNavigate: (key: NavKey) => void;
+}) {
   return (
     <header className="sticky top-0 z-50 ml-60 flex h-14 items-center justify-between border-b border-slate-800 bg-[#0b0d11]/95 px-5 backdrop-blur">
       <div className="relative w-full max-w-xl">
@@ -1299,10 +1520,7 @@ function TopBar({ role, onRoleChange }: { role: AccessRole; onRoleChange: (role:
           leadingIcon={<Shield className="h-3.5 w-3.5 shrink-0 text-sky-300" />}
           className="w-48"
         />
-        <div className="relative">
-          <Bell className="h-4 w-4 text-slate-400" />
-          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-sky-400" />
-        </div>
+        <NotificationBell role={role} open={notificationOpen} onOpenChange={onNotificationOpenChange} onNavigate={onNavigate} />
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900">
             <User className="h-3.5 w-3.5 text-slate-200" />
@@ -1394,9 +1612,7 @@ function Dashboard({ role, onSelect }: { role: AccessRole; onSelect: (key: NavKe
   const workflowRequiredCount = trades.filter((trade) => trade.status === "workflow_required").length;
   const readyCount = trades.filter((trade) => trade.status === "validated").length;
   const exceptionCount = trades.filter((trade) => trade.status === "unresolved" || trade.status === "needs_review").length;
-  const tradeReviewTarget: NavKey = roleCanAccessNav(role, "review") ? "review" : roleCanAccessNav(role, "externalTrades") ? "externalTrades" : roleCanAccessNav(role, "trades") ? "trades" : "documents";
-  const canOpenIntegrations = roleCanAccessNav(role, "integrations");
-  const integrationsActionLabel = rolePermissions[role].canManageIntegrations ? "Manage" : "View";
+  const tradeReviewTarget: NavKey = roleCanAccessNav(role, "review") ? "review" : roleCanAccessNav(role, "trades") ? "trades" : "documents";
   const queueRows = trades.slice(0, 4).map((trade) => ({
     broker: trade.broker,
     asset: trade.asset,
@@ -1494,23 +1710,6 @@ function Dashboard({ role, onSelect }: { role: AccessRole; onSelect: (key: NavKe
           </ShellCard>
         ))}
       </div>
-      <ShellCard className="mt-5 p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-white">Integration status</h2>
-            <p className="mt-1 text-xs text-slate-500">Vantage, broker, document, and fill delivery health</p>
-          </div>
-          {canOpenIntegrations && <button onClick={() => onSelect("integrations")} className="flex items-center gap-1.5 text-xs font-semibold text-sky-400">{integrationsActionLabel} <ChevronRight className="h-3.5 w-3.5" /></button>}
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          {["Vantage Blotter API", "Private Broker API", "DocuSign / iCapital", "Fill Return API"].map((item) => (
-            <div key={item} className="rounded-lg border border-slate-800 bg-slate-950/35 p-3.5">
-              <div className="text-sm font-semibold text-white">{item}</div>
-              <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Connected</div>
-            </div>
-          ))}
-        </div>
-      </ShellCard>
     </>
   );
 }
@@ -1561,7 +1760,35 @@ function TradeRow({ trade, compact = false, onClick }: { trade: Trade; compact?:
   );
 }
 
-function Trades({ trades: localTrades, role, openNewTrade, openTrade }: { trades: Trade[]; role: AccessRole; openNewTrade: () => void; openTrade: (trade: Trade) => void }) {
+type TradeBlotterTab = "all" | "inbound" | "ready" | "review" | "manual";
+
+function tradeSourceLabel(trade: Trade) {
+  return trade.vantageTradeId.startsWith("vt_manual_") || trade.inboundTradeId.startsWith("it_manual_") ? "Manual" : "Vantage";
+}
+
+function findProcessedTradeForInbound(item: typeof externalTrades[number], localTrades: Trade[]) {
+  return localTrades.find((trade) => trade.vantageTradeId === item.externalId || trade.inboundTradeId === item.inboundTradeId);
+}
+
+function tradeTitle(type: string, quantity?: string, amount?: string) {
+  const value = quantity && quantity !== "-" ? quantity : amount && amount !== "-" ? amount : "Trade";
+  return value === "Trade" ? type : `${type} ${value}`;
+}
+
+function TradeBlotter({
+  trades: localTrades,
+  role,
+  openNewTrade,
+  openTrade,
+  openExternalTrade,
+}: {
+  trades: Trade[];
+  role: AccessRole;
+  openNewTrade: () => void;
+  openTrade: (trade: Trade) => void;
+  openExternalTrade: (id: string) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<TradeBlotterTab>("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [statusDropOpen, setStatusDropOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -1569,35 +1796,91 @@ function Trades({ trades: localTrades, role, openNewTrade, openTrade }: { trades
   const [typeFilter, setTypeFilter] = useState("all");
   const canCreateTrades = rolePermissions[role].canCreateTrades;
 
-  const uniqueBrokers = Array.from(new Set(localTrades.map(t => t.broker)));
+  const uniqueBrokers = Array.from(new Set([...localTrades.map(t => t.broker), ...externalTrades.map(t => t.broker)])).sort();
   const statuses = ["all", "validated", "workflow_required", "unresolved", "needs_review"];
-  const filtered = localTrades.filter(t => {
+  const processedExternalKeys = new Set(localTrades.flatMap((trade) => [trade.vantageTradeId, trade.inboundTradeId]));
+
+  const visiblePatsTrades = localTrades.filter(t => {
+    const source = tradeSourceLabel(t);
+    if (activeTab === "inbound") return false;
+    if (activeTab === "ready" && t.status !== "validated") return false;
+    if (activeTab === "review" && t.status !== "unresolved" && t.status !== "needs_review") return false;
+    if (activeTab === "manual" && source !== "Manual") return false;
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (brokerFilter !== "all" && t.broker !== brokerFilter) return false;
     if (typeFilter !== "all" && t.type !== typeFilter) return false;
     return true;
   });
 
+  const visibleInboundTrades = externalTrades.filter(t => {
+    const alreadyProcessed = processedExternalKeys.has(t.externalId) || processedExternalKeys.has(t.inboundTradeId);
+    if (activeTab !== "all" && activeTab !== "inbound" && activeTab !== "review" && activeTab !== "ready") return false;
+    if (activeTab === "all" && alreadyProcessed) return false;
+    if ((activeTab === "review" || activeTab === "ready") && alreadyProcessed) return false;
+    if (activeTab === "ready" && t.validation !== "validated") return false;
+    if (activeTab === "review" && t.validation !== "unresolved") return false;
+    if (statusFilter !== "all" && t.validation !== statusFilter) return false;
+    if (brokerFilter !== "all" && t.broker !== brokerFilter) return false;
+    return true;
+  });
+
   const activeFilters = [brokerFilter !== "all", typeFilter !== "all"].filter(Boolean).length;
+  const inboundOnlyCount = externalTrades.filter((item) => !processedExternalKeys.has(item.externalId) && !processedExternalKeys.has(item.inboundTradeId)).length;
+  const blotterTabs: Array<[TradeBlotterTab, string, number]> = [
+    ["all", "All Trades", localTrades.length + inboundOnlyCount],
+    ["inbound", "Inbound", externalTrades.length],
+    ["ready", "Ready", localTrades.filter(t => t.status === "validated").length],
+    ["review", "Needs Review", localTrades.filter(t => t.status === "unresolved" || t.status === "needs_review").length + externalTrades.filter(t => t.validation === "unresolved" && !processedExternalKeys.has(t.externalId) && !processedExternalKeys.has(t.inboundTradeId)).length],
+    ["manual", "Created Manually", localTrades.filter(t => tradeSourceLabel(t) === "Manual").length],
+  ];
+  const totalVisible = visiblePatsTrades.length + visibleInboundTrades.length;
 
   const exportCSV = () => {
-    const header = ["ID", "Type", "Broker", "Ticker", "Asset", "Quantity", "Amount", "Status", "Workflow", "Time"].join(",");
-    const rows = filtered.map(t => [t.id, t.type, `"${t.broker}"`, t.ticker, `"${t.asset}"`, t.quantity, t.amount, t.status, t.workflowReason, t.time].join(","));
+    const header = ["Source", "ID", "Type", "Broker", "Ticker", "Asset", "Quantity", "Amount", "Status", "Workflow", "Time"].join(",");
+    const patsRows = visiblePatsTrades.map(t => [tradeSourceLabel(t), t.id, t.type, `"${t.broker}"`, t.ticker, `"${t.asset}"`, t.quantity, t.amount, t.status, t.workflowReason, t.time].join(","));
+    const inboundRows = visibleInboundTrades.map(t => {
+      const processed = findProcessedTradeForInbound(t, localTrades);
+      return ["Vantage", t.externalId, processed?.type ?? "Inbound", `"${t.broker}"`, t.ticker, `"${t.asset}"`, processed?.quantity ?? "-", processed?.amount ?? "-", t.validation, t.execution, t.received].join(",");
+    });
+    const rows = [...inboundRows, ...patsRows];
     const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "pats-trades.csv"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "trade-blotter.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <>
       <PageTitle
-        title="PATS Trade Blotter"
-        subtitle="Trades after PATS checks the broker, asset, workflow, and next action"
+        title="Trade Blotter"
+        subtitle="Inbound, reviewed, manually created, and execution-ready trades in one operational view"
         action={canCreateTrades ? <button onClick={openNewTrade} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white shadow-lg shadow-sky-950/30"><Plus className="h-3.5 w-3.5" />New Manual Trade</button> : undefined}
       />
       {!canCreateTrades && <ReadOnlyNotice label="This role can inspect trades and workflow status, but cannot create manual trades or change trade routing." />}
+      <ShellCard className="mb-4 overflow-hidden">
+        <div className="grid grid-cols-5 gap-px bg-slate-800/80">
+          {blotterTabs.map(([key, label, count]) => {
+            const selected = activeTab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`flex min-h-[58px] items-center justify-between bg-[#101318] px-4 text-left transition ${selected ? "bg-sky-500/10" : "hover:bg-slate-900"}`}
+              >
+                <span>
+                  <span className={`block text-xs font-semibold ${selected ? "text-sky-300" : "text-slate-200"}`}>{label}</span>
+                  <span className="mt-1 block text-[10px] text-slate-600">
+                    {key === "all" ? "Complete queue" : key === "inbound" ? "Arrived from Vantage" : key === "ready" ? "Validated or actionable" : key === "review" ? "Ops attention" : "Entered in PATS"}
+                  </span>
+                </span>
+                <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${selected ? "bg-sky-400 text-slate-950" : "bg-slate-800 text-slate-400"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </ShellCard>
       <Toolbar placeholder="Search trade, ticker, broker, private asset, investor, or workflow status...">
         <div className="relative">
           <button onClick={() => setStatusDropOpen(v => !v)} className="h-9 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">
@@ -1635,11 +1918,57 @@ function Trades({ trades: localTrades, role, openNewTrade, openTrade }: { trades
         </div>
       )}
       <ShellCard className="overflow-hidden">
-        <TradeTableHeader />
+        <div className="grid grid-cols-[0.65fr_1fr_1.15fr_1fr_1.25fr_0.9fr_0.9fr_1fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
+          <span>Source</span>
+          <span>Trade</span>
+          <span>Broker</span>
+          <span>Investor / account</span>
+          <span>Private asset</span>
+          <span>Status</span>
+          <span>Workflow</span>
+          <span>Next action</span>
+        </div>
         <div className="space-y-px">
-          {filtered.length === 0
-            ? <p className="px-5 py-6 text-xs text-slate-500">No trades match the current filters.</p>
-            : filtered.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => openTrade(trade)} />)}
+          {totalVisible === 0 && <p className="px-5 py-6 text-xs text-slate-500">No trades match the current filters.</p>}
+          {visibleInboundTrades.map((item) => {
+            const processed = findProcessedTradeForInbound(item, localTrades);
+            return (
+              <button key={item.externalId} onClick={() => openExternalTrade(item.externalId)} className="grid w-full grid-cols-[0.65fr_1fr_1.15fr_1fr_1.25fr_0.9fr_0.9fr_1fr] items-center border-t border-slate-800/80 px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
+                <span><StatusBadge value="Vantage" tone="blue" /></span>
+                <span>
+                  <span className="block text-sm font-semibold text-slate-100">{processed ? tradeTitle(processed.type, processed.quantity, processed.amount) : "Received trade"}</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-500">Received {item.received}</span>
+                </span>
+                <span className="text-xs text-slate-300">{item.broker}</span>
+                <span className="text-xs text-slate-500">{processed ? tradeInvestorLabel(processed) : "Not assigned"}</span>
+                <span>
+                  <span className="block font-semibold text-slate-100">{item.asset}</span>
+                  <span className="mt-0.5 block text-[11px] text-sky-300">{item.ticker}</span>
+                </span>
+                <span><StatusBadge value={item.validation} /></span>
+                <span><StatusBadge value={item.execution} /></span>
+                <span className="text-xs font-semibold text-sky-300">{item.validation === "validated" ? "Open processed trade" : item.validation === "workflow_required" ? "Start workflow" : "Ops review"}</span>
+              </button>
+            );
+          })}
+          {visiblePatsTrades.map((trade) => (
+            <button key={trade.id} onClick={() => openTrade(trade)} className="grid w-full grid-cols-[0.65fr_1fr_1.15fr_1fr_1.25fr_0.9fr_0.9fr_1fr] items-center border-t border-slate-800/80 px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
+              <span><StatusBadge value={tradeSourceLabel(trade)} tone={tradeSourceLabel(trade) === "Manual" ? "purple" : "blue"} /></span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-100">{trade.type} {trade.quantity !== "-" ? trade.quantity : trade.amount}</span>
+                <span className="mt-0.5 block text-[11px] text-slate-500">Received {trade.time}</span>
+              </span>
+              <span className="text-xs text-slate-300">{trade.broker}</span>
+              <span className="text-xs text-slate-400">{tradeInvestorLabel(trade)}</span>
+              <span>
+                <span className="block font-semibold text-slate-100">{trade.asset}</span>
+                <span className="mt-0.5 block text-[11px] text-sky-300">{trade.ticker}</span>
+              </span>
+              <span><StatusBadge value={trade.status} /></span>
+              <span><StatusBadge value={trade.workflowReason} /></span>
+              <span className="text-xs font-semibold text-sky-300">{tradeNextAction(trade)}</span>
+            </button>
+          ))}
         </div>
       </ShellCard>
     </>
@@ -1651,79 +1980,6 @@ function TableHeader({ columns }: { columns: string[] }) {
     <div className="grid border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
       {columns.map((column) => <span key={column}>{column}</span>)}
     </div>
-  );
-}
-
-function TradeTableHeader() {
-  return (
-    <div className={`grid ${tradeGridClass} border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600`}>
-      <span>Trade</span>
-      <span>Broker</span>
-      <span>Investor / account</span>
-      <span>Private asset</span>
-      <span>Status</span>
-      <span>Workflow</span>
-      <span>Next action</span>
-    </div>
-  );
-}
-
-function ExternalTrades({ openItem }: { openItem: (id: string) => void }) {
-  const [showFilters, setShowFilters] = useState(false);
-  const [brokerFilter, setBrokerFilter] = useState("all");
-  const [resultFilter, setResultFilter] = useState("all");
-
-  const uniqueBrokers = Array.from(new Set(externalTrades.map(t => t.broker)));
-  const filtered = externalTrades.filter(t => {
-    if (brokerFilter !== "all" && t.broker !== brokerFilter) return false;
-    if (resultFilter !== "all" && t.validation !== resultFilter) return false;
-    return true;
-  });
-  const activeFilters = [brokerFilter !== "all", resultFilter !== "all"].filter(Boolean).length;
-
-  return (
-    <>
-      <PageTitle title="Inbound Blotter" subtitle="Trades received from Vantage and what PATS decided for each one" />
-      <Toolbar placeholder="Search source, broker, ticker, private asset, PATS result, or received time...">
-        <button onClick={() => setShowFilters(v => !v)} className={`flex h-9 items-center gap-2 rounded-md border px-3.5 text-xs font-semibold transition ${showFilters ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-200"}`}>
-          <Filter className="h-3.5 w-3.5" />Filters
-          {activeFilters > 0 && <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[9px] font-bold text-white">{activeFilters}</span>}
-        </button>
-      </Toolbar>
-      {showFilters && (
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0d1015] px-4 py-3">
-          <span className="text-[10px] font-semibold text-slate-500">FILTER BY</span>
-          <select value={brokerFilter} onChange={e => setBrokerFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
-            <option value="all">All brokers</option>
-            {uniqueBrokers.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select value={resultFilter} onChange={e => setResultFilter(e.target.value)} className="h-7 rounded border border-slate-800 bg-[#11151b] px-2 text-xs text-slate-200 outline-none">
-            <option value="all">All results</option>
-            <option value="validated">Validated</option>
-            <option value="workflow_required">Workflow required</option>
-            <option value="unresolved">Unresolved</option>
-          </select>
-          {activeFilters > 0 && <button onClick={() => { setBrokerFilter("all"); setResultFilter("all"); }} className="ml-auto text-xs text-rose-400 hover:text-rose-300">Clear filters</button>}
-        </div>
-      )}
-      <ShellCard className="overflow-hidden">
-        <TableHeader columns={["Source", "Broker", "Ticker received", "Matched asset", "PATS result", "Next action", "Received"]} />
-        <div className="divide-y divide-slate-800/80">
-          {filtered.map((item) => (
-            <button key={item.externalId} onClick={() => openItem(item.externalId)} className="grid w-full grid-cols-7 items-center px-5 py-3.5 text-left text-sm transition hover:bg-slate-900/65">
-              <span className="text-xs font-medium text-sky-300">Vantage</span>
-              <span className="text-xs text-slate-300">{item.broker}</span>
-              <span className="text-sm font-semibold text-slate-100">{item.ticker}</span>
-              <span className="text-xs text-slate-300">{item.asset}</span>
-              <span><StatusBadge value={item.validation} /></span>
-              <span className="text-xs font-semibold text-sky-300">{item.validation === "validated" ? "Move to blotter" : item.validation === "workflow_required" ? "Start workflow" : "Ops review"}</span>
-              <span className="text-xs text-slate-500">{item.received}</span>
-            </button>
-          ))}
-          {filtered.length === 0 && <p className="px-5 py-4 text-xs text-slate-500">No trades match the current filters.</p>}
-        </div>
-      </ShellCard>
-    </>
   );
 }
 
@@ -4696,84 +4952,6 @@ function ReturnFailedPanel({ onSave, onClose }: { onSave: (reason: string) => vo
   );
 }
 
-function Integrations({ role }: { role: AccessRole }) {
-  const canManageIntegrations = rolePermissions[role].canManageIntegrations;
-  const rows = [
-    ["Vantage Blotter API", "Inbound trades and outbound fill return", "1,245", "99.9%", "42ms", "2 minutes ago"],
-    ["Private Broker API", "Broker routing, confirmations, and fill intake", "3,882", "99.7%", "18ms", "1 minute ago"],
-    ["Document Platforms", "DocuSign, iCapital, and manual document steps", "941", "99.5%", "62ms", "5 minutes ago"],
-    ["Fill Return Webhook", "Normalized fill delivery back to Vantage", "728", "99.4%", "58ms", "3 minutes ago"],
-  ];
-  return (
-    <>
-      <PageTitle title="Integrations" subtitle="Manage Vantage, broker, document, and fill-return connections" />
-      {!canManageIntegrations && <ReadOnlyNotice label="Integration health is visible, but credentials, routing configuration, and connection settings are hidden for this role." />}
-      <div className="mb-5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-400" />All systems operational</div>
-        <p className="mt-2 text-xs text-slate-400">Inbound blotter, broker routing, workflow documents, and fill return are currently healthy.</p>
-      </div>
-      <div className="space-y-4">
-        {rows.map(([name, desc, requests, uptime, latency, last]) => (
-          <ShellCard key={name} className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-400/10"><Plug className="h-4 w-4 text-sky-300" /></div>
-                <div><h2 className="text-sm font-semibold text-white">{name}</h2><p className="mt-1 text-xs text-slate-500">{desc}</p></div>
-              </div>
-              <div className="flex items-center gap-4">
-                <StatusBadge value="Connected" />
-                {canManageIntegrations ? <Settings className="h-4 w-4 text-slate-500" /> : <StatusBadge value="View only" tone="gray" />}
-              </div>
-            </div>
-            <div className="mt-5 grid grid-cols-4 gap-3">
-              <InfoBox label="Requests Today" value={requests} />
-              <InfoBox label="Uptime" value={uptime} accent />
-              <InfoBox label="Avg Latency" value={latency} />
-              <InfoBox label="Last Activity" value={last} />
-            </div>
-          </ShellCard>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function InfoBox({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className={`mt-1.5 text-base font-semibold ${accent ? "text-emerald-400" : "text-white"}`}>{value}</p></div>;
-}
-
-function ActivityLog() {
-  return (
-    <>
-      <PageTitle title="Activity" subtitle="Audit log for users, systems, and external events" />
-      <ShellCard className="p-6">
-        <Timeline items={activityEvents} current={activityEvents.length - 1} />
-      </ShellCard>
-    </>
-  );
-}
-
-function AlertsPage() {
-  return (
-    <>
-      <PageTitle title="Alerts & Exceptions" subtitle="Operational issues that need review or resolution" />
-      <ShellCard className="overflow-hidden">
-        <TableHeader columns={["Severity", "Entity", "Issue", "Status", "Owner", "Created"]} />
-        {alerts.map((alert) => (
-          <div key={alert.entity} className="grid grid-cols-6 items-center border-t border-slate-800/80 px-5 py-4 text-sm">
-            <span><StatusBadge value={alert.severity} tone={alert.severity === "Critical" || alert.severity === "High" ? "red" : alert.severity === "Medium" ? "yellow" : "blue"} /></span>
-            <span className="text-xs text-sky-300">{alert.entity}</span>
-            <span className="text-sm text-slate-100">{alert.issue}</span>
-            <span><StatusBadge value={alert.status} /></span>
-            <span className="text-xs text-slate-300">{alert.owner}</span>
-            <span className="text-xs text-slate-500">{alert.created}</span>
-          </div>
-        ))}
-      </ShellCard>
-    </>
-  );
-}
-
 function accessStatusTone(status: AccessStatus): StatusTone {
   if (status === "active") return "green";
   if (status === "pending") return "yellow";
@@ -4839,12 +5017,11 @@ function RoleAccessPreview({ role, onRoleChange }: { role: AccessRole; onRoleCha
     },
     {
       title: "Operations",
-      caption: "Broker setup, execution, and integrations",
+      caption: "Broker setup, execution, and routing",
       icon: Route,
       items: [
         ["Broker config", permissions.canManageBrokers ? "Allowed" : "View only / hidden actions"],
         ["Execution actions", permissions.canOperateExecution ? "Allowed" : roleCanAccessNav(role, "execution") ? "View only" : "Hidden"],
-        ["Integration settings", permissions.canManageIntegrations ? "Allowed" : roleCanAccessNav(role, "integrations") ? "View only" : "Hidden"],
       ],
     },
     {
@@ -5072,14 +5249,13 @@ function SettingsPage() {
   const settings = [
     ["Users and Roles", "Trader, Operations, Admin, Compliance", Users],
     ["Broker Configuration", "Routes, settlement, supported asset classes", Building2],
-    ["Integration Credentials", "SS&C, FIX, API credentials", KeyRound],
     ["Fill Return Destinations", "Outbound fill delivery back to Vantage", Send],
     ["Trade Validation Rules", "Lock-up, supply, ticker and workflow rules", Shield],
     ["Status Mapping", "Normalize external statuses into PATS lifecycle", Route],
   ] as const;
   return (
     <>
-      <PageTitle title="Settings" subtitle="Admin configuration for users, integrations, brokers, and rules" />
+      <PageTitle title="Settings" subtitle="Admin configuration for users, brokers, routing, and rules" />
       <div className="grid grid-cols-2 gap-5">
         {settings.map(([title, desc, Icon]) => (
           <ShellCard key={title} className="p-6">
@@ -5120,15 +5296,15 @@ function DetailPanel({ title, subtitle, onClose, children }: { title: string; su
     <>
       <button
         aria-label="Close panel overlay"
-        className="fixed inset-0 z-[35] cursor-default bg-black/55 backdrop-blur-[1px]"
+        className="fixed bottom-0 left-0 right-0 top-14 z-[35] cursor-default bg-black/55 backdrop-blur-[1px]"
         onClick={onClose}
       />
-      <div className="fixed inset-y-0 right-0 z-40 w-[540px] border-l border-slate-800 bg-[#0d1015] shadow-2xl">
+      <div className="fixed bottom-0 right-0 top-14 z-40 w-[540px] border-l border-slate-800 bg-[#0d1015] shadow-2xl">
         <div className="flex h-20 items-start justify-between border-b border-slate-800 p-5">
           <div><h2 className="text-lg font-semibold text-white">{title}</h2>{subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}</div>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
-        <div className="h-[calc(100vh-80px)] overflow-y-auto p-5">{children}</div>
+        <div className="h-[calc(100vh-136px)] overflow-y-auto p-5">{children}</div>
       </div>
     </>
   );
@@ -6003,6 +6179,7 @@ export default function PatsPlatform() {
   const [selectedExternal, setSelectedExternal] = useState<string | null>(null);
   const [newTradeOpen, setNewTradeOpen] = useState(false);
   const [newBrokerOpen, setNewBrokerOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
 
   const [localTrades, setLocalTrades] = useState<Trade[]>(() => loadLocal("pats_trades", trades));
   const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
@@ -6043,13 +6220,26 @@ export default function PatsPlatform() {
   return (
     <div className="min-h-screen bg-[#080a0d] font-sans text-slate-100 [font-feature-settings:'tnum']">
       <Sidebar active={active} role={activeRole} onSelect={selectNav} />
-      <TopBar role={activeRole} onRoleChange={changeRole} />
+      <TopBar
+        role={activeRole}
+        onRoleChange={changeRole}
+        notificationOpen={notificationOpen}
+        onNotificationOpenChange={setNotificationOpen}
+        onNavigate={selectNav}
+      />
       <MarketContextBar />
+      {notificationOpen && (
+        <button
+          type="button"
+          aria-label="Close notification center"
+          onClick={() => setNotificationOpen(false)}
+          className="fixed bottom-0 left-0 right-0 top-14 z-40 cursor-default bg-black/55 backdrop-blur-[1px]"
+        />
+      )}
       <main className="ml-60 min-h-[calc(100vh-94px)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.055),transparent_32%),linear-gradient(180deg,#0b0d11_0%,#080a0d_100%)] px-5 py-5">
         <div className="mx-auto max-w-[1560px]">
           {active === "dashboard" && <Dashboard role={activeRole} onSelect={selectNav} />}
-          {active === "trades" && <Trades trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} />}
-          {active === "externalTrades" && <ExternalTrades openItem={setSelectedExternal} />}
+          {active === "trades" && <TradeBlotter trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} openExternalTrade={setSelectedExternal} />}
           {active === "review" && <ReviewCenter role={activeRole} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} />}
@@ -6057,10 +6247,7 @@ export default function PatsPlatform() {
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
           {active === "households" && <Households role={activeRole} />}
           {active === "execution" && <Execution role={activeRole} />}
-          {active === "integrations" && <Integrations role={activeRole} />}
           {active === "userAccess" && <UserAccessPage users={localUserAccess} onUpdateUser={updateUserAccess} />}
-          {active === "activity" && <ActivityLog />}
-          {active === "alerts" && <AlertsPage />}
           {active === "settings" && <SettingsPage />}
         </div>
       </main>
