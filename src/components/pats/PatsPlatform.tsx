@@ -1742,6 +1742,56 @@ function reviewReasonLabel(reason: ReviewReason) {
   return labels[reason];
 }
 
+type ReviewReasonGroup = "all" | "account" | "ticker" | "asset" | "investor" | "workflow";
+
+const reviewReasonGroups: Array<{
+  key: ReviewReasonGroup;
+  label: string;
+  description: string;
+  reasons: ReviewReason[];
+}> = [
+  {
+    key: "all",
+    label: "All",
+    description: "Every open review case",
+    reasons: [],
+  },
+  {
+    key: "account",
+    label: "Account",
+    description: "Account assignment or account status issues",
+    reasons: ["invalid_account", "inactive_account"],
+  },
+  {
+    key: "ticker",
+    label: "Ticker",
+    description: "Broker ticker mapping or unknown private asset",
+    reasons: ["missing_broker_ticker", "unknown_private_asset"],
+  },
+  {
+    key: "asset",
+    label: "Asset",
+    description: "Private asset status or broker ownership mismatch",
+    reasons: ["inactive_private_asset", "broker_asset_mismatch"],
+  },
+  {
+    key: "investor",
+    label: "Investor",
+    description: "Investor/contact matching issues",
+    reasons: ["missing_user"],
+  },
+  {
+    key: "workflow",
+    label: "Workflow",
+    description: "Eligibility and workflow creation recovery",
+    reasons: ["eligibility_error", "workflow_creation_error"],
+  },
+];
+
+function reviewReasonGroup(reason: ReviewReason): ReviewReasonGroup {
+  return reviewReasonGroups.find((group) => group.key !== "all" && group.reasons.includes(reason))?.key ?? "all";
+}
+
 function reviewActionHint(reason: ReviewReason) {
   const hints: Record<ReviewReason, string> = {
     missing_broker_ticker: "Create or update the broker-scoped ticker mapping, then reprocess.",
@@ -1782,19 +1832,19 @@ function reviewUserLabel(item: TradeReviewCase) {
 
 function ReviewCenter({ role }: { role: AccessRole }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ReviewStatus>("all");
-  const [reasonFilter, setReasonFilter] = useState<"all" | ReviewReason>("all");
+  const [activeGroup, setActiveGroup] = useState<ReviewReasonGroup>("all");
   const [expandedCase, setExpandedCase] = useState<string | null>(null);
 
   const cases = tradeReviewCases;
+  const activeGroupConfig = reviewReasonGroups.find((group) => group.key === activeGroup) ?? reviewReasonGroups[0];
   const filtered = cases.filter((item) => {
     if (statusFilter !== "all" && item.status !== statusFilter) return false;
-    if (reasonFilter !== "all" && item.reason !== reasonFilter) return false;
+    if (activeGroup !== "all" && reviewReasonGroup(item.reason) !== activeGroup) return false;
     return true;
   });
   const unresolvedCount = cases.filter((item) => item.status === "unresolved").length;
   const needsReviewCount = cases.filter((item) => item.status === "needs_review").length;
   const highPriorityCount = cases.filter((item) => item.priority === "High").length;
-  const reasonOptions = Array.from(new Set(cases.map((item) => item.reason)));
 
   if (role !== "pats_ops") {
     return <ReadOnlyNotice label="Review Center is reserved for PATS Ops because it can change mappings, account assignment, and trade disposition." />;
@@ -1823,17 +1873,42 @@ function ReviewCenter({ role }: { role: AccessRole }) {
           ))}
         </div>
       </ShellCard>
-      <Toolbar placeholder="Search inbound id, Vantage id, broker, ticker, account, or reason...">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | ReviewStatus)} className="h-9 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 outline-none">
-          <option value="all">All statuses</option>
-          <option value="unresolved">Unresolved</option>
-          <option value="needs_review">Needs review</option>
-        </select>
-        <select value={reasonFilter} onChange={(e) => setReasonFilter(e.target.value as "all" | ReviewReason)} className="h-9 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 outline-none">
-          <option value="all">All reasons</option>
-          {reasonOptions.map((reason) => <option key={reason} value={reason}>{reviewReasonLabel(reason)}</option>)}
-        </select>
-      </Toolbar>
+      <ShellCard className="mb-5 overflow-hidden">
+        <div className="grid grid-cols-6 border-b border-slate-800 bg-slate-950/45">
+          {reviewReasonGroups.map((group) => {
+            const count = group.key === "all"
+              ? cases.length
+              : cases.filter((item) => reviewReasonGroup(item.reason) === group.key).length;
+            const isActive = activeGroup === group.key;
+            return (
+              <button
+                key={group.key}
+                onClick={() => { setActiveGroup(group.key); setExpandedCase(null); }}
+                className={`min-h-[76px] border-r border-slate-800 px-4 py-3 text-left transition last:border-r-0 ${isActive ? "bg-sky-500/10" : "hover:bg-slate-900/60"}`}
+              >
+                <span className={`block text-sm font-semibold ${isActive ? "text-sky-300" : "text-slate-100"}`}>{group.label}</span>
+                <span className="mt-1 block text-[11px] leading-4 text-slate-500">{group.description}</span>
+                <span className={`mt-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${isActive ? "bg-sky-400 text-slate-950" : "bg-slate-800 text-slate-300"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-between px-5 py-3">
+          <div>
+            <p className="text-xs font-semibold text-slate-100">{activeGroupConfig.label} review queue</p>
+            <p className="mt-1 text-[11px] text-slate-500">{activeGroupConfig.description}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Status</span>
+            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as "all" | ReviewStatus); setExpandedCase(null); }} className="h-8 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200 outline-none">
+              <option value="all">All statuses</option>
+              <option value="unresolved">Unresolved</option>
+              <option value="needs_review">Needs review</option>
+            </select>
+          </div>
+        </div>
+      </ShellCard>
+      <Toolbar placeholder="Search broker, ticker, account, investor, problem, or action..." />
       <ShellCard className="overflow-hidden">
         <div className="grid grid-cols-[0.9fr_1.1fr_0.9fr_1.25fr_1.25fr_1fr_0.85fr_0.5fr] border-b border-slate-800 bg-slate-950/60 px-5 py-2 text-[8px] font-semibold text-slate-600">
           <span>Status</span><span>Reason</span><span>Trade</span><span>Broker</span><span>Asset / ticker</span><span>Account / user</span><span>Received</span><span />
