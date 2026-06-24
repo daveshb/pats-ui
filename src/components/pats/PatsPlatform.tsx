@@ -6089,7 +6089,7 @@ function AddAccountPanel({ household, persons, onClose }: { household: Household
             <FormField label="Primary person / entity">
               <select className={compactInputClass}>
                 {persons.length === 0
-                  ? <option>No persons added yet</option>
+                  ? <option>No persons added yet </option>
                   : persons.map((p) => <option key={p.personId} value={p.personId}>{personDisplayName(p)}</option>)
                 }
               </select>
