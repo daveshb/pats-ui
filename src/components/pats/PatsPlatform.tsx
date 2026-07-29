@@ -228,7 +228,8 @@ type ReviewReason =
   | "inactive_private_asset"
   | "missing_user"
   | "eligibility_error"
-  | "workflow_creation_error";
+  | "workflow_creation_error"
+  | "workflow_manual_review";
 
 interface TradeReviewCase {
   reviewId: string;
@@ -238,7 +239,7 @@ interface TradeReviewCase {
   reason: ReviewReason;
   priority: "High" | "Medium" | "Low";
   receivedAt: string;
-  source: "Vantage API" | "Manual";
+  source: "Vantage API" | "Manual" | "Workflow";
   broker: string;
   vantageBrokerId: string;
   ticker: string;
@@ -781,6 +782,54 @@ const tradeReviewCases: TradeReviewCase[] = [
     primaryAction: "Mark eligible",
     secondaryAction: "Retry check",
     payload: [["Investor", "nina.walsh@example.com"], ["Asset", "TechCorp Series A"], ["Review trigger", "Eligibility check failed"]],
+  },
+  {
+    reviewId: "rev_workflow_final_002",
+    inboundTradeId: "it_d672e1c1",
+    vantageTradeId: "vt_no_eligibility_001",
+    status: "needs_review",
+    reason: "workflow_manual_review",
+    priority: "Medium",
+    receivedAt: "10:18 AM",
+    source: "Workflow",
+    broker: "Goldman Sachs Advisor Solutions",
+    vantageBrokerId: "176f7a13d62244845b746b04c79fa621",
+    ticker: "TECH-A",
+    privateAsset: "TechCorp Series A",
+    side: "Subscribe",
+    quantity: "10,000",
+    amount: "$452,000",
+    accountId: "acct-456",
+    userId: "user-456",
+    diagnosis: "This trade needs the final PATS Ops review after its required documents and approvals are complete.",
+    resolution: "Review the completed workflow package and approve the trade to continue to execution.",
+    primaryAction: "Approve workflow",
+    secondaryAction: "Hold trade",
+    payload: [["Workflow", "TechCorp Series A Subscription"], ["Current requirement", "Investor signature"], ["Review trigger", "Final Ops review"]],
+  },
+  {
+    reviewId: "rev_workflow_final_003",
+    inboundTradeId: "it_cb41f317",
+    vantageTradeId: "vt_every_trade_001",
+    status: "needs_review",
+    reason: "workflow_manual_review",
+    priority: "Medium",
+    receivedAt: "10:12 AM",
+    source: "Workflow",
+    broker: "Morgan Stanley Alternatives",
+    vantageBrokerId: "35dc8d0f6703e35a81dac3912ec3b549",
+    ticker: "HEALTH-B",
+    privateAsset: "HealthTech Preferred",
+    side: "Redeem",
+    quantity: "5,000",
+    amount: "$642,500",
+    accountId: "acct-123",
+    userId: "user-123",
+    diagnosis: "This trade needs the final PATS Ops review after the redemption notice and broker approvals are complete.",
+    resolution: "Review the completed workflow package and approve the trade to continue to execution.",
+    primaryAction: "Approve workflow",
+    secondaryAction: "Hold trade",
+    payload: [["Workflow", "HealthTech Redemption"], ["Current requirement", "Redemption notice"], ["Review trigger", "Final Ops review"]],
   },
 ];
 
@@ -1994,6 +2043,7 @@ function reviewReasonLabel(reason: ReviewReason) {
     missing_user: "Missing user",
     eligibility_error: "Eligibility error",
     workflow_creation_error: "Workflow creation error",
+    workflow_manual_review: "Final workflow review",
   };
   return labels[reason];
 }
@@ -2040,7 +2090,7 @@ const reviewReasonGroups: Array<{
     key: "workflow",
     label: "Workflow",
     description: "Eligibility and workflow creation recovery",
-    reasons: ["eligibility_error", "workflow_creation_error"],
+    reasons: ["eligibility_error", "workflow_creation_error", "workflow_manual_review"],
   },
 ];
 
@@ -2059,6 +2109,7 @@ function reviewActionHint(reason: ReviewReason) {
     missing_user: "Link the external user to a PATS contact or leave the investor unassigned.",
     eligibility_error: "Retry the eligibility check after correcting account/user context.",
     workflow_creation_error: "Retry workflow creation after checking the template and document setup.",
+    workflow_manual_review: "Review the completed workflow package and approve or hold the trade.",
   };
   return hints[reason];
 }
@@ -2086,10 +2137,10 @@ function reviewUserLabel(item: TradeReviewCase) {
   return "Not assigned";
 }
 
-function ReviewCenter({ role }: { role: AccessRole }) {
+function ReviewCenter({ role, initialReviewId }: { role: AccessRole; initialReviewId?: string | null }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ReviewStatus>("all");
   const [activeGroup, setActiveGroup] = useState<ReviewReasonGroup>("all");
-  const [expandedCase, setExpandedCase] = useState<string | null>(null);
+  const [expandedCase, setExpandedCase] = useState<string | null>(initialReviewId ?? null);
 
   const cases = tradeReviewCases;
   const activeGroupConfig = reviewReasonGroups.find((group) => group.key === activeGroup) ?? reviewReasonGroups[0];
@@ -3463,6 +3514,7 @@ interface MockWorkflowStep {
   owner: string;
   action?: string;
   destination?: NavKey;
+  targetId?: string;
   detail?: string;
 }
 
@@ -3481,10 +3533,10 @@ const mockTradeWorkflowState: Record<string, {
     currentRequirement: "Investor signature",
     updated: "6 min ago",
     steps: [
-      { title: "Subscription agreement", type: "Document", status: "completed", owner: "PATS Ops", action: "View document", destination: "documents", detail: "Uploaded and reviewed" },
-      { title: "Investor signature", type: "Signature", status: "current", owner: "Sarah Chen", action: "Open Documents", destination: "documents", detail: "Waiting for investor signature. Open Documents to send or review the signature packet." },
+      { title: "Subscription agreement", type: "Document", status: "completed", owner: "PATS Ops", action: "View document", destination: "documents", targetId: "tdoc_001", detail: "Uploaded and reviewed" },
+      { title: "Investor signature", type: "Signature", status: "current", owner: "Sarah Chen", action: "Open Documents", destination: "documents", targetId: "tdoc_002", detail: "Waiting for investor signature. Open Documents to send or review the signature packet." },
       { title: "Broker approval", type: "Approval", status: "waiting", owner: "Goldman broker", detail: "Starts after signature" },
-      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", action: "Open Review Center", destination: "review", detail: "Available after the required documents are complete" },
+      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", action: "Open Review Center", destination: "review", targetId: "rev_workflow_final_002", detail: "Available after the required documents are complete" },
     ],
   },
   "TRD-003": {
@@ -3494,11 +3546,11 @@ const mockTradeWorkflowState: Record<string, {
     currentRequirement: "Redemption notice",
     updated: "14 min ago",
     steps: [
-      { title: "Redemption notice", type: "Document", status: "blocked", owner: "PATS Ops", action: "Open Documents", destination: "documents", detail: "Required signed notice has not been uploaded. Add it in Documents to unblock this workflow." },
+      { title: "Redemption notice", type: "Document", status: "blocked", owner: "PATS Ops", action: "Open Documents", destination: "documents", targetId: "tdoc_003", detail: "Required signed notice has not been uploaded. Add it in Documents to unblock this workflow." },
       { title: "Notice period check", type: "Validation", status: "waiting", owner: "PATS Ops", detail: "Waiting for redemption notice" },
       { title: "Liquidity review", type: "Review", status: "waiting", owner: "Morgan Stanley", detail: "Waiting for previous step" },
       { title: "Broker approval", type: "Approval", status: "waiting", owner: "Morgan Stanley", detail: "Waiting for previous step" },
-      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", action: "Open Review Center", destination: "review", detail: "Available after the previous requirements are completed" },
+      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", action: "Open Review Center", destination: "review", targetId: "rev_workflow_final_003", detail: "Available after the previous requirements are completed" },
     ],
   },
 };
@@ -3513,12 +3565,12 @@ function workflowStepTone(status: MockWorkflowStepStatus): StatusTone {
 function TradeWorkflowsView({
   localWorkflows,
   localTrades,
-  onNavigate,
+  onOpenDestination,
   onOpenTrade,
 }: {
   localWorkflows: WorkflowRecord[];
   localTrades: Trade[];
-  onNavigate: (destination: NavKey) => void;
+  onOpenDestination: (destination: NavKey, targetId?: string) => void;
   onOpenTrade: (trade: Trade) => void;
 }) {
   const workflowTrades = localTrades.filter((trade) => trade.workflowRequired && trade.workflowTemplateId);
@@ -3693,7 +3745,7 @@ function TradeWorkflowsView({
                   {currentStep.action && currentStep.destination && (
                     <button
                       type="button"
-                      onClick={() => onNavigate(currentStep.destination!)}
+                      onClick={() => onOpenDestination(currentStep.destination!, currentStep.targetId)}
                       className={`flex shrink-0 items-center gap-2 rounded-md px-4 py-2.5 text-xs font-semibold ${
                         currentStep.status === "blocked"
                           ? "bg-rose-500 text-white"
@@ -3741,7 +3793,7 @@ function TradeWorkflowsView({
                           {step.action && (
                             <button
                               type="button"
-                              onClick={() => step.destination && onNavigate(step.destination)}
+                              onClick={() => step.destination && onOpenDestination(step.destination, step.targetId)}
                               disabled={!step.destination}
                               className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${
                               step.status === "blocked"
@@ -3768,7 +3820,7 @@ function TradeWorkflowsView({
               </p>
               <button
                 type="button"
-                onClick={() => onNavigate("execution")}
+                onClick={() => onOpenDestination("execution", selectedTrade.inboundTradeId)}
                 className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-sky-300"
               >
                 View Execution Flow <ChevronRight className="h-3.5 w-3.5" />
@@ -3935,7 +3987,7 @@ function Workflows({
   role,
   onAddWorkflow,
   onUpdateWorkflow,
-  onNavigate,
+  onOpenDestination,
   onOpenTrade,
 }: {
   workflows: WorkflowRecord[];
@@ -3943,7 +3995,7 @@ function Workflows({
   role: AccessRole;
   onAddWorkflow: (w: WorkflowRecord) => void;
   onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void;
-  onNavigate: (destination: NavKey) => void;
+  onOpenDestination: (destination: NavKey, targetId?: string) => void;
   onOpenTrade: (trade: Trade) => void;
 }) {
   const [activeTab, setActiveTab] = useState<WorkflowPageTab>("trades");
@@ -3977,7 +4029,7 @@ function Workflows({
         <TradeWorkflowsView
           localWorkflows={localWorkflows}
           localTrades={localTrades}
-          onNavigate={onNavigate}
+          onOpenDestination={onOpenDestination}
           onOpenTrade={onOpenTrade}
         />
       ) : (
@@ -4520,13 +4572,15 @@ function Documents({
   activeRole,
   onAddDoc,
   onUpdateDoc,
+  initialDocumentId,
 }: {
   docs: TradeDoc[];
   activeRole: AccessRole;
   onAddDoc: (d: TradeDoc) => void;
   onUpdateDoc: (id: string, p: Partial<TradeDoc>) => void;
+  initialDocumentId?: string | null;
 }) {
-  const [selectedDocumentId, setSelectedDocumentId] = useState(docs[0]?.tradeDocumentId ?? "");
+  const [selectedDocumentId, setSelectedDocumentId] = useState(initialDocumentId ?? docs[0]?.tradeDocumentId ?? "");
   const [addDocOpen, setAddDocOpen] = useState(false);
   const [blockInput, setBlockInput] = useState("");
   const [showBlockInput, setShowBlockInput] = useState(false);
@@ -4994,11 +5048,14 @@ function AddDocumentPanel({ viewer, onAdd, onClose }: { viewer: DocumentViewer; 
   );
 }
 
-function Execution({ role }: { role: AccessRole }) {
+function Execution({ role, initialInboundTradeId }: { role: AccessRole; initialInboundTradeId?: string | null }) {
   const [flows, setFlows] = useState<ExecutionFlowRecord[]>(executionFlows);
   const [fillPanelFlow, setFillPanelFlow] = useState<ExecutionFlowRecord | null>(null);
   const [failedFill, setFailedFill] = useState<{ flowId: string; fillId: string } | null>(null);
   const canOperateExecution = rolePermissions[role].canOperateExecution;
+  const visibleFlows = initialInboundTradeId
+    ? [...flows].sort((left, right) => Number(right.inboundTradeId === initialInboundTradeId) - Number(left.inboundTradeId === initialInboundTradeId))
+    : flows;
 
   const updateFlow = (tradeId: string, updater: (flow: ExecutionFlowRecord) => ExecutionFlowRecord) => {
     setFlows(current => current.map(flow => flow.tradeId === tradeId ? updater(flow) : flow));
@@ -5048,8 +5105,13 @@ function Execution({ role }: { role: AccessRole }) {
       <PageTitle title="Execution Flow" subtitle="Validated trades, execution records, fills, and return status back to Vantage" />
       {!canOperateExecution && <ReadOnlyNotice label="Execution status, fills, and return state are visible, but this role cannot create executions, add fills, confirm fills, or mark returns." />}
       <div className="space-y-4">
-        {flows.map((flow) => (
-          <ShellCard key={flow.tradeId} className="p-5">
+        {visibleFlows.map((flow) => {
+          const isTargetFlow = initialInboundTradeId === flow.inboundTradeId;
+          return (
+          <ShellCard
+            key={flow.tradeId}
+            className={`p-5 ${isTargetFlow ? "border-sky-400/40 bg-sky-400/[0.04] ring-1 ring-sky-400/20" : ""}`}
+          >
             <div className="flex items-start justify-between gap-6">
               <div>
                 <div className="flex items-center gap-3">
@@ -5222,7 +5284,8 @@ function Execution({ role }: { role: AccessRole }) {
               </div>
             </div>
           </ShellCard>
-        ))}
+          );
+        })}
       </div>
       {canOperateExecution && fillPanelFlow && (
         <ExecutionFillPanel
@@ -6577,6 +6640,9 @@ export default function PatsPlatform() {
   const [newTradeOpen, setNewTradeOpen] = useState(false);
   const [newBrokerOpen, setNewBrokerOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [workflowDocumentTarget, setWorkflowDocumentTarget] = useState<string | null>(null);
+  const [workflowReviewTarget, setWorkflowReviewTarget] = useState<string | null>(null);
+  const [workflowExecutionTarget, setWorkflowExecutionTarget] = useState<string | null>(null);
 
   const [localTrades, setLocalTrades] = useState<Trade[]>(() => loadLocal("pats_trades", trades));
   const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
@@ -6605,7 +6671,18 @@ export default function PatsPlatform() {
   const updateWorkflow = (id: string, p: Partial<WorkflowRecord>) => { const n = localWorkflows.map(w => w.id === id ? { ...w, ...p } : w); setLocalWorkflows(n); saveLocal("pats_workflows", n); };
   const updateUserAccess = (id: string, p: Partial<UserAccessRequest>) => { const n = localUserAccess.map(u => u.userId === id ? { ...u, ...p } : u); setLocalUserAccess(n); saveLocal("pats_user_access", n); };
   const selectNav = (key: NavKey) => {
-    if (roleCanAccessNav(activeRole, key)) setActive(key);
+    if (roleCanAccessNav(activeRole, key)) {
+      setWorkflowDocumentTarget(null);
+      setWorkflowReviewTarget(null);
+      setWorkflowExecutionTarget(null);
+      setActive(key);
+    }
+  };
+  const openWorkflowDestination = (destination: NavKey, targetId?: string) => {
+    selectNav(destination);
+    if (destination === "documents") setWorkflowDocumentTarget(targetId ?? null);
+    if (destination === "review") setWorkflowReviewTarget(targetId ?? null);
+    if (destination === "execution") setWorkflowExecutionTarget(targetId ?? null);
   };
   const changeRole = (role: AccessRole) => {
     setActiveRole(role);
@@ -6637,13 +6714,13 @@ export default function PatsPlatform() {
         <div className="mx-auto max-w-[1560px]">
           {active === "dashboard" && <Dashboard role={activeRole} onSelect={selectNav} />}
           {active === "trades" && <TradeBlotter trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} openExternalTrade={setSelectedExternal} />}
-          {active === "review" && <ReviewCenter role={activeRole} />}
+          {active === "review" && <ReviewCenter role={activeRole} initialReviewId={workflowReviewTarget} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} />}
-          {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} onNavigate={selectNav} onOpenTrade={setSelectedTrade} />}
-          {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
+          {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} onOpenDestination={openWorkflowDestination} onOpenTrade={setSelectedTrade} />}
+          {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} initialDocumentId={workflowDocumentTarget} />}
           {active === "households" && <Households role={activeRole} />}
-          {active === "execution" && <Execution role={activeRole} />}
+          {active === "execution" && <Execution role={activeRole} initialInboundTradeId={workflowExecutionTarget} />}
           {active === "userAccess" && <UserAccessPage users={localUserAccess} onUpdateUser={updateUserAccess} />}
           {active === "settings" && <SettingsPage />}
         </div>
