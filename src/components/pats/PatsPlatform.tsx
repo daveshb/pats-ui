@@ -3462,6 +3462,7 @@ interface MockWorkflowStep {
   status: MockWorkflowStepStatus;
   owner: string;
   action?: string;
+  destination?: NavKey;
   detail?: string;
 }
 
@@ -3480,10 +3481,10 @@ const mockTradeWorkflowState: Record<string, {
     currentRequirement: "Investor signature",
     updated: "6 min ago",
     steps: [
-      { title: "Subscription agreement", type: "Document", status: "completed", owner: "PATS Ops", detail: "Uploaded and reviewed" },
-      { title: "Investor signature", type: "Signature", status: "current", owner: "Sarah Chen", action: "Open signature packet", detail: "Waiting for investor signature" },
+      { title: "Subscription agreement", type: "Document", status: "completed", owner: "PATS Ops", action: "View document", destination: "documents", detail: "Uploaded and reviewed" },
+      { title: "Investor signature", type: "Signature", status: "current", owner: "Sarah Chen", action: "Open Documents", destination: "documents", detail: "Waiting for investor signature. Open Documents to send or review the signature packet." },
       { title: "Broker approval", type: "Approval", status: "waiting", owner: "Goldman broker", detail: "Starts after signature" },
-      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", detail: "Final required step" },
+      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", action: "Open Review Center", destination: "review", detail: "Available after the required documents are complete" },
     ],
   },
   "TRD-003": {
@@ -3493,11 +3494,11 @@ const mockTradeWorkflowState: Record<string, {
     currentRequirement: "Redemption notice",
     updated: "14 min ago",
     steps: [
-      { title: "Redemption notice", type: "Document", status: "blocked", owner: "PATS Ops", action: "Review blocker", detail: "Required signed notice has not been uploaded" },
+      { title: "Redemption notice", type: "Document", status: "blocked", owner: "PATS Ops", action: "Open Documents", destination: "documents", detail: "Required signed notice has not been uploaded. Add it in Documents to unblock this workflow." },
       { title: "Notice period check", type: "Validation", status: "waiting", owner: "PATS Ops", detail: "Waiting for redemption notice" },
       { title: "Liquidity review", type: "Review", status: "waiting", owner: "Morgan Stanley", detail: "Waiting for previous step" },
       { title: "Broker approval", type: "Approval", status: "waiting", owner: "Morgan Stanley", detail: "Waiting for previous step" },
-      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", detail: "Final required step" },
+      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", action: "Open Review Center", destination: "review", detail: "Available after the previous requirements are completed" },
     ],
   },
 };
@@ -3509,13 +3510,24 @@ function workflowStepTone(status: MockWorkflowStepStatus): StatusTone {
   return "gray";
 }
 
-function TradeWorkflowsView({ localWorkflows, localTrades }: { localWorkflows: WorkflowRecord[]; localTrades: Trade[] }) {
+function TradeWorkflowsView({
+  localWorkflows,
+  localTrades,
+  onNavigate,
+  onOpenTrade,
+}: {
+  localWorkflows: WorkflowRecord[];
+  localTrades: Trade[];
+  onNavigate: (destination: NavKey) => void;
+  onOpenTrade: (trade: Trade) => void;
+}) {
   const workflowTrades = localTrades.filter((trade) => trade.workflowRequired && trade.workflowTemplateId);
   const [selectedTradeId, setSelectedTradeId] = useState(workflowTrades[0]?.id ?? "");
   const [statusFilter, setStatusFilter] = useState<"all" | MockTradeWorkflowStatus>("all");
   const selectedTrade = workflowTrades.find((trade) => trade.id === selectedTradeId) ?? workflowTrades[0];
   const selectedState = selectedTrade ? mockTradeWorkflowState[selectedTrade.id] : undefined;
   const selectedTemplate = localWorkflows.find((flow) => flow.id === selectedTrade?.workflowTemplateId);
+  const currentStep = selectedState?.steps.find((step) => step.status === "current" || step.status === "blocked");
   const visibleTrades = workflowTrades.filter((trade) => {
     const state = mockTradeWorkflowState[trade.id];
     return statusFilter === "all" || state?.status === statusFilter;
@@ -3637,7 +3649,7 @@ function TradeWorkflowsView({ localWorkflows, localTrades }: { localWorkflows: W
                   <h2 className="mt-2 text-lg font-semibold text-white">{selectedTrade.type} {selectedTrade.quantity !== "-" ? selectedTrade.quantity : selectedTrade.amount}</h2>
                   <p className="mt-1 text-xs text-slate-500">{selectedTrade.id} · {selectedTrade.inboundTradeId}</p>
                 </div>
-                <button className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+                <button onClick={() => onOpenTrade(selectedTrade)} className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
                   Open trade details
                 </button>
               </div>
@@ -3660,6 +3672,41 @@ function TradeWorkflowsView({ localWorkflows, localTrades }: { localWorkflows: W
                 </div>
               </div>
             </ShellCard>
+
+            {currentStep && (
+              <ShellCard className={`border p-4 ${
+                currentStep.status === "blocked"
+                  ? "border-rose-400/25 bg-rose-400/5"
+                  : "border-sky-400/25 bg-sky-400/5"
+              }`}>
+                <div className="flex items-center justify-between gap-5">
+                  <div className="flex items-start gap-3">
+                    {currentStep.status === "blocked"
+                      ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" />
+                      : <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />}
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">What to do next</p>
+                      <h3 className="mt-1 text-sm font-semibold text-white">{currentStep.title}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{currentStep.detail}</p>
+                    </div>
+                  </div>
+                  {currentStep.action && currentStep.destination && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(currentStep.destination!)}
+                      className={`flex shrink-0 items-center gap-2 rounded-md px-4 py-2.5 text-xs font-semibold ${
+                        currentStep.status === "blocked"
+                          ? "bg-rose-500 text-white"
+                          : "bg-sky-500 text-white"
+                      }`}
+                    >
+                      {currentStep.action}
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </ShellCard>
+            )}
 
             <ShellCard className="overflow-hidden">
               <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
@@ -3692,11 +3739,18 @@ function TradeWorkflowsView({ localWorkflows, localTrades }: { localWorkflows: W
                             {step.detail && <p className={`mt-2 text-xs ${step.status === "blocked" ? "text-rose-300" : "text-slate-400"}`}>{step.detail}</p>}
                           </div>
                           {step.action && (
-                            <button className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${
+                            <button
+                              type="button"
+                              onClick={() => step.destination && onNavigate(step.destination)}
+                              disabled={!step.destination}
+                              className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${
                               step.status === "blocked"
                                 ? "border border-rose-400/25 bg-rose-400/10 text-rose-300"
-                                : "bg-sky-500 text-white"
-                            }`}>
+                                : step.status === "completed"
+                                  ? "border border-slate-700 bg-slate-900 text-slate-300"
+                                  : "bg-sky-500 text-white"
+                            }`}
+                            >
                               {step.action}
                             </button>
                           )}
@@ -3708,8 +3762,17 @@ function TradeWorkflowsView({ localWorkflows, localTrades }: { localWorkflows: W
               </div>
             </ShellCard>
 
-            <div className="rounded-md border border-slate-800 bg-[#0c1117] px-4 py-3 text-xs text-slate-400">
-              This trade will move to <span className="font-semibold text-emerald-300">ready for execution</span> after all required steps are completed.
+            <div className="flex items-center justify-between rounded-md border border-slate-800 bg-[#0c1117] px-4 py-3">
+              <p className="text-xs text-slate-400">
+                After all required steps are completed, this trade moves to <span className="font-semibold text-emerald-300">ready for execution</span>.
+              </p>
+              <button
+                type="button"
+                onClick={() => onNavigate("execution")}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-sky-300"
+              >
+                View Execution Flow <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
         ) : (
@@ -3866,7 +3929,23 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
   );
 }
 
-function Workflows({ workflows: localWorkflows, trades: localTrades, role, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; trades: Trade[]; role: AccessRole; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
+function Workflows({
+  workflows: localWorkflows,
+  trades: localTrades,
+  role,
+  onAddWorkflow,
+  onUpdateWorkflow,
+  onNavigate,
+  onOpenTrade,
+}: {
+  workflows: WorkflowRecord[];
+  trades: Trade[];
+  role: AccessRole;
+  onAddWorkflow: (w: WorkflowRecord) => void;
+  onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void;
+  onNavigate: (destination: NavKey) => void;
+  onOpenTrade: (trade: Trade) => void;
+}) {
   const [activeTab, setActiveTab] = useState<WorkflowPageTab>("trades");
   const canManageWorkflows = rolePermissions[role].canManageWorkflows;
 
@@ -3895,7 +3974,12 @@ function Workflows({ workflows: localWorkflows, trades: localTrades, role, onAdd
         </button>
       </div>
       {activeTab === "trades" ? (
-        <TradeWorkflowsView localWorkflows={localWorkflows} localTrades={localTrades} />
+        <TradeWorkflowsView
+          localWorkflows={localWorkflows}
+          localTrades={localTrades}
+          onNavigate={onNavigate}
+          onOpenTrade={onOpenTrade}
+        />
       ) : (
         <>
           {!canManageWorkflows && <ReadOnlyNotice label="Workflow setup is shown for traceability, but this role cannot create templates or add requirements." />}
@@ -6556,7 +6640,7 @@ export default function PatsPlatform() {
           {active === "review" && <ReviewCenter role={activeRole} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} />}
-          {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
+          {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} onNavigate={selectNav} onOpenTrade={setSelectedTrade} />}
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
           {active === "households" && <Households role={activeRole} />}
           {active === "execution" && <Execution role={activeRole} />}
