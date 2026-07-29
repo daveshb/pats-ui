@@ -3452,7 +3452,281 @@ function WorkflowsLegacy() {
   );
 }
 
-function Workflows({ workflows: localWorkflows, role, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; role: AccessRole; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
+type WorkflowPageTab = "trades" | "setup";
+type MockTradeWorkflowStatus = "needs_action" | "in_progress" | "blocked" | "completed";
+type MockWorkflowStepStatus = "completed" | "current" | "waiting" | "blocked";
+
+interface MockWorkflowStep {
+  title: string;
+  type: string;
+  status: MockWorkflowStepStatus;
+  owner: string;
+  action?: string;
+  detail?: string;
+}
+
+const mockTradeWorkflowState: Record<string, {
+  status: MockTradeWorkflowStatus;
+  completed: number;
+  owner: string;
+  currentRequirement: string;
+  updated: string;
+  steps: MockWorkflowStep[];
+}> = {
+  "TRD-002": {
+    status: "in_progress",
+    completed: 1,
+    owner: "Sarah Chen",
+    currentRequirement: "Investor signature",
+    updated: "6 min ago",
+    steps: [
+      { title: "Subscription agreement", type: "Document", status: "completed", owner: "PATS Ops", detail: "Uploaded and reviewed" },
+      { title: "Investor signature", type: "Signature", status: "current", owner: "Sarah Chen", action: "Open signature packet", detail: "Waiting for investor signature" },
+      { title: "Broker approval", type: "Approval", status: "waiting", owner: "Goldman broker", detail: "Starts after signature" },
+      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", detail: "Final required step" },
+    ],
+  },
+  "TRD-003": {
+    status: "blocked",
+    completed: 0,
+    owner: "PATS Ops",
+    currentRequirement: "Redemption notice",
+    updated: "14 min ago",
+    steps: [
+      { title: "Redemption notice", type: "Document", status: "blocked", owner: "PATS Ops", action: "Review blocker", detail: "Required signed notice has not been uploaded" },
+      { title: "Notice period check", type: "Validation", status: "waiting", owner: "PATS Ops", detail: "Waiting for redemption notice" },
+      { title: "Liquidity review", type: "Review", status: "waiting", owner: "Morgan Stanley", detail: "Waiting for previous step" },
+      { title: "Broker approval", type: "Approval", status: "waiting", owner: "Morgan Stanley", detail: "Waiting for previous step" },
+      { title: "Final Ops review", type: "Manual review", status: "waiting", owner: "PATS Ops", detail: "Final required step" },
+    ],
+  },
+};
+
+function workflowStepTone(status: MockWorkflowStepStatus): StatusTone {
+  if (status === "completed") return "green";
+  if (status === "current") return "blue";
+  if (status === "blocked") return "red";
+  return "gray";
+}
+
+function TradeWorkflowsView({ localWorkflows, localTrades }: { localWorkflows: WorkflowRecord[]; localTrades: Trade[] }) {
+  const workflowTrades = localTrades.filter((trade) => trade.workflowRequired && trade.workflowTemplateId);
+  const [selectedTradeId, setSelectedTradeId] = useState(workflowTrades[0]?.id ?? "");
+  const [statusFilter, setStatusFilter] = useState<"all" | MockTradeWorkflowStatus>("all");
+  const selectedTrade = workflowTrades.find((trade) => trade.id === selectedTradeId) ?? workflowTrades[0];
+  const selectedState = selectedTrade ? mockTradeWorkflowState[selectedTrade.id] : undefined;
+  const selectedTemplate = localWorkflows.find((flow) => flow.id === selectedTrade?.workflowTemplateId);
+  const visibleTrades = workflowTrades.filter((trade) => {
+    const state = mockTradeWorkflowState[trade.id];
+    return statusFilter === "all" || state?.status === statusFilter;
+  });
+  const counts = {
+    needs_action: workflowTrades.filter((trade) => mockTradeWorkflowState[trade.id]?.status === "needs_action").length,
+    in_progress: workflowTrades.filter((trade) => mockTradeWorkflowState[trade.id]?.status === "in_progress").length,
+    blocked: workflowTrades.filter((trade) => mockTradeWorkflowState[trade.id]?.status === "blocked").length,
+    completed: 24,
+  };
+
+  return (
+    <>
+      <div className="mb-4 grid grid-cols-4 gap-3">
+        {([
+          ["needs_action", "Needs action", counts.needs_action, "Waiting to be started"],
+          ["in_progress", "In progress", counts.in_progress, "Requirements underway"],
+          ["blocked", "Blocked", counts.blocked, "Needs attention"],
+          ["completed", "Completed", counts.completed, "Finished workflows"],
+        ] as const).map(([key, label, count, description]) => {
+          const selected = statusFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setStatusFilter(selected ? "all" : key)}
+              className={`rounded-lg border p-4 text-left transition ${
+                selected
+                  ? "border-sky-400/40 bg-sky-400/10"
+                  : "border-slate-800 bg-[#101318] hover:bg-slate-900/70"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-semibold ${selected ? "text-sky-300" : "text-slate-200"}`}>{label}</span>
+                <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-300">{count}</span>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">{description}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <Toolbar placeholder="Search trade, ticker, private asset, investor, requirement, or owner...">
+        <button className="flex h-9 items-center gap-2 rounded-lg border border-slate-800 bg-[#11151b] px-4 text-sm text-slate-200">
+          <Filter className="h-4 w-4" />Filters
+        </button>
+      </Toolbar>
+
+      <div className="grid grid-cols-[1.05fr_1.35fr] gap-5">
+        <ShellCard className="overflow-hidden">
+          <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+            <h2 className="text-sm font-semibold text-slate-100">Trades requiring workflow</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Select a trade to see exactly what is required next.</p>
+          </div>
+          <div className="divide-y divide-slate-800/80">
+            {visibleTrades.length === 0 && (
+              <div className="px-5 py-8 text-center">
+                <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-400" />
+                <p className="mt-2 text-sm font-semibold text-slate-200">No workflows in this status</p>
+                <p className="mt-1 text-xs text-slate-500">Choose another status to continue.</p>
+              </div>
+            )}
+            {visibleTrades.map((trade) => {
+              const state = mockTradeWorkflowState[trade.id];
+              const template = localWorkflows.find((flow) => flow.id === trade.workflowTemplateId);
+              const total = state?.steps.length ?? 0;
+              const progress = total > 0 ? Math.round(((state?.completed ?? 0) / total) * 100) : 0;
+              const isSelected = selectedTrade?.id === trade.id;
+              return (
+                <button
+                  key={trade.id}
+                  type="button"
+                  onClick={() => setSelectedTradeId(trade.id)}
+                  className={`w-full px-5 py-4 text-left transition ${isSelected ? "bg-sky-400/10" : "hover:bg-slate-900/65"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge value={displayLabel(state?.status ?? "needs_action")} />
+                        <span className="text-[11px] text-slate-500">{trade.time}</span>
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold text-slate-100">{trade.type} {trade.quantity !== "-" ? trade.quantity : trade.amount}</h3>
+                      <p className="mt-1 text-xs text-slate-400">{trade.asset} <span className="font-semibold text-sky-300">· {trade.ticker}</span></p>
+                    </div>
+                    <ChevronRight className={`mt-1 h-4 w-4 ${isSelected ? "text-sky-300" : "text-slate-600"}`} />
+                  </div>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500">{state?.completed ?? 0} of {total} completed</span>
+                      <span className="font-semibold text-slate-300">{progress}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                      <div className="h-full rounded-full bg-sky-400" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-md border border-slate-800 bg-slate-950/35 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Current requirement</p>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold text-slate-200">{state?.currentRequirement ?? "Start workflow"}</span>
+                      <span className="text-[11px] text-slate-500">{state?.owner ?? "Unassigned"}</span>
+                    </div>
+                  </div>
+                  <p className="mt-2 truncate text-[11px] text-slate-600">{template?.name ?? "Workflow template"}</p>
+                </button>
+              );
+            })}
+          </div>
+        </ShellCard>
+
+        {selectedTrade && selectedState && selectedTemplate ? (
+          <div className="space-y-5">
+            <ShellCard className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge value={displayLabel(selectedState.status)} />
+                    <span className="text-[11px] text-slate-500">Updated {selectedState.updated}</span>
+                  </div>
+                  <h2 className="mt-2 text-lg font-semibold text-white">{selectedTrade.type} {selectedTrade.quantity !== "-" ? selectedTrade.quantity : selectedTrade.amount}</h2>
+                  <p className="mt-1 text-xs text-slate-500">{selectedTrade.id} · {selectedTrade.inboundTradeId}</p>
+                </div>
+                <button className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+                  Open trade details
+                </button>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <Info label="Private asset" value={`${selectedTrade.asset} (${selectedTrade.ticker})`} />
+                <Info label="Broker" value={selectedTrade.broker} />
+                <Info label="Investor / account" value={selectedTrade.accountId ?? "Not assigned"} />
+                <Info label="Template" value={selectedTemplate.name} />
+              </div>
+              <div className="mt-4 rounded-md border border-sky-400/20 bg-sky-400/5 p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-300">Workflow progress</p>
+                    <p className="mt-1 text-xs text-slate-300">{selectedState.completed} of {selectedState.steps.length} required steps completed</p>
+                  </div>
+                  <span className="text-lg font-semibold text-white">{Math.round((selectedState.completed / selectedState.steps.length) * 100)}%</span>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-full rounded-full bg-sky-400" style={{ width: `${(selectedState.completed / selectedState.steps.length) * 100}%` }} />
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard className="overflow-hidden">
+              <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-100">Required steps</h2>
+                <p className="mt-1 text-[11px] text-slate-500">Complete each required step before this trade can move to execution.</p>
+              </div>
+              <div className="divide-y divide-slate-800/80">
+                {selectedState.steps.map((step, index) => (
+                  <div key={`${selectedTrade.id}-${step.title}`} className={`px-5 py-4 ${step.status === "current" || step.status === "blocked" ? "bg-slate-950/35" : ""}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+                        step.status === "completed"
+                          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                          : step.status === "blocked"
+                            ? "border-rose-400/30 bg-rose-400/10 text-rose-300"
+                            : step.status === "current"
+                              ? "border-sky-400/30 bg-sky-400/10 text-sky-300"
+                              : "border-slate-700 bg-slate-900 text-slate-500"
+                      }`}>
+                        {step.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : step.status === "blocked" ? <AlertTriangle className="h-4 w-4" /> : index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-semibold text-slate-100">{step.title}</h3>
+                              <StatusBadge value={step.status} tone={workflowStepTone(step.status)} />
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">{step.type} · Assigned to {step.owner}</p>
+                            {step.detail && <p className={`mt-2 text-xs ${step.status === "blocked" ? "text-rose-300" : "text-slate-400"}`}>{step.detail}</p>}
+                          </div>
+                          {step.action && (
+                            <button className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${
+                              step.status === "blocked"
+                                ? "border border-rose-400/25 bg-rose-400/10 text-rose-300"
+                                : "bg-sky-500 text-white"
+                            }`}>
+                              {step.action}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ShellCard>
+
+            <div className="rounded-md border border-slate-800 bg-[#0c1117] px-4 py-3 text-xs text-slate-400">
+              This trade will move to <span className="font-semibold text-emerald-300">ready for execution</span> after all required steps are completed.
+            </div>
+          </div>
+        ) : (
+          <ShellCard className="flex min-h-[360px] items-center justify-center p-8 text-center">
+            <div>
+              <ListChecks className="mx-auto h-8 w-8 text-slate-600" />
+              <p className="mt-3 text-sm font-semibold text-slate-200">Select a trade workflow</p>
+              <p className="mt-1 text-xs text-slate-500">Its requirements and next action will appear here.</p>
+            </div>
+          </ShellCard>
+        )}
+      </div>
+    </>
+  );
+}
+
+function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; role: AccessRole; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(localWorkflows[0]?.id ?? "");
   const [workflowPanel, setWorkflowPanel] = useState<"template" | "requirement" | null>(null);
   const canManageWorkflows = rolePermissions[role].canManageWorkflows;
@@ -3468,18 +3742,12 @@ function Workflows({ workflows: localWorkflows, role, onAddWorkflow, onUpdateWor
 
   return (
     <>
-      <PageTitle
-        title="Workflows"
-        subtitle="Rules for each private asset that decide if a trade can move forward or needs steps first"
-        action={
-          canManageWorkflows ? (
-            <div className="flex gap-2">
-              <button onClick={() => setWorkflowPanel("requirement")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
-              <button onClick={() => setWorkflowPanel("template")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
-            </div>
-          ) : undefined
-        }
-      />
+      {canManageWorkflows && (
+        <div className="mb-4 flex justify-end gap-2">
+          <button onClick={() => setWorkflowPanel("requirement")} className="flex h-9 items-center gap-1.5 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Add Requirement</button>
+          <button onClick={() => setWorkflowPanel("template")} className="flex h-9 items-center gap-1.5 rounded-md bg-sky-500 px-3 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Create Template</button>
+        </div>
+      )}
       {!canManageWorkflows && <ReadOnlyNotice label="Workflow rules are shown for traceability, but this role cannot create templates or add requirements." />}
       <Toolbar placeholder="Search workflow, broker, private asset, policy, requirement, or status..." />
       <div className="grid grid-cols-[0.95fr_1.4fr] gap-5">
@@ -3594,6 +3862,51 @@ function Workflows({ workflows: localWorkflows, role, onAddWorkflow, onUpdateWor
       </div>
       {canManageWorkflows && workflowPanel === "template" && <CreateWorkflowTemplatePanel onAdd={onAddWorkflow} onClose={() => setWorkflowPanel(null)} />}
       {canManageWorkflows && workflowPanel === "requirement" && selectedWorkflow && <AddWorkflowRequirementPanel workflow={selectedWorkflow} onUpdate={(types) => onUpdateWorkflow(selectedWorkflow.id, { requirementTypes: types, requirements: `${types.length} requirement${types.length !== 1 ? "s" : ""}` })} onClose={() => setWorkflowPanel(null)} />}
+    </>
+  );
+}
+
+function Workflows({ workflows: localWorkflows, trades: localTrades, role, onAddWorkflow, onUpdateWorkflow }: { workflows: WorkflowRecord[]; trades: Trade[]; role: AccessRole; onAddWorkflow: (w: WorkflowRecord) => void; onUpdateWorkflow: (id: string, p: Partial<WorkflowRecord>) => void }) {
+  const [activeTab, setActiveTab] = useState<WorkflowPageTab>("trades");
+  const canManageWorkflows = rolePermissions[role].canManageWorkflows;
+
+  return (
+    <>
+      <PageTitle
+        title="Workflows"
+        subtitle={activeTab === "trades"
+          ? "See which trades need workflow, what is pending, and who needs to act next"
+          : "Configure the templates and requirements PATS applies to private asset trades"}
+      />
+      <div className="mb-5 inline-flex rounded-lg border border-slate-800 bg-[#0d1015] p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("trades")}
+          className={`rounded-md px-4 py-2 text-xs font-semibold transition ${activeTab === "trades" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-200"}`}
+        >
+          Trade Workflows
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("setup")}
+          className={`rounded-md px-4 py-2 text-xs font-semibold transition ${activeTab === "setup" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-200"}`}
+        >
+          Template Setup
+        </button>
+      </div>
+      {activeTab === "trades" ? (
+        <TradeWorkflowsView localWorkflows={localWorkflows} localTrades={localTrades} />
+      ) : (
+        <>
+          {!canManageWorkflows && <ReadOnlyNotice label="Workflow setup is shown for traceability, but this role cannot create templates or add requirements." />}
+          <WorkflowTemplateSetup
+            workflows={localWorkflows}
+            role={role}
+            onAddWorkflow={onAddWorkflow}
+            onUpdateWorkflow={onUpdateWorkflow}
+          />
+        </>
+      )}
     </>
   );
 }
@@ -6243,7 +6556,7 @@ export default function PatsPlatform() {
           {active === "review" && <ReviewCenter role={activeRole} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
           {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} />}
-          {active === "workflows" && <Workflows workflows={localWorkflows} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
+          {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} />}
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} />}
           {active === "households" && <Households role={activeRole} />}
           {active === "execution" && <Execution role={activeRole} />}
