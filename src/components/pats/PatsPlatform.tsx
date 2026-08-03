@@ -5048,14 +5048,53 @@ function AddDocumentPanel({ viewer, onAdd, onClose }: { viewer: DocumentViewer; 
   );
 }
 
-function Execution({ role, initialInboundTradeId }: { role: AccessRole; initialInboundTradeId?: string | null }) {
+function Execution({
+  role,
+  initialInboundTradeId,
+  onOpenWorkflow,
+}: {
+  role: AccessRole;
+  initialInboundTradeId?: string | null;
+  onOpenWorkflow?: (tradeWorkflowId?: string) => void;
+}) {
   const [flows, setFlows] = useState<ExecutionFlowRecord[]>(executionFlows);
   const [fillPanelFlow, setFillPanelFlow] = useState<ExecutionFlowRecord | null>(null);
   const [failedFill, setFailedFill] = useState<{ flowId: string; fillId: string } | null>(null);
+  const [queueFilter, setQueueFilter] = useState<"action" | "all" | "completed">("action");
+  const [executionSearch, setExecutionSearch] = useState("");
   const canOperateExecution = rolePermissions[role].canOperateExecution;
+  const needsAction = (flow: ExecutionFlowRecord) =>
+    !flow.executionId ||
+    flow.fills.length === 0 ||
+    flow.fills.some(fill =>
+      fill.status === "pending" ||
+      fill.returnStatus === "ready_to_return" ||
+      fill.returnStatus === "manual_return_required" ||
+      fill.returnStatus === "return_failed"
+    );
+  const completed = (flow: ExecutionFlowRecord) =>
+    flow.fills.length > 0 && flow.fills.every(fill => fill.returnStatus === "returned");
+  const normalizedSearch = executionSearch.trim().toLowerCase();
+  const filteredFlows = flows.filter(flow => {
+    const matchesQueue =
+      queueFilter === "all" ||
+      (queueFilter === "action" && needsAction(flow)) ||
+      (queueFilter === "completed" && completed(flow));
+    const matchesSearch =
+      !normalizedSearch ||
+      [flow.tradeId, flow.inboundTradeId, flow.ticker, flow.asset, flow.broker]
+        .some(value => value.toLowerCase().includes(normalizedSearch));
+    return matchesQueue && matchesSearch;
+  });
   const visibleFlows = initialInboundTradeId
-    ? [...flows].sort((left, right) => Number(right.inboundTradeId === initialInboundTradeId) - Number(left.inboundTradeId === initialInboundTradeId))
-    : flows;
+    ? [...filteredFlows].sort((left, right) => Number(right.inboundTradeId === initialInboundTradeId) - Number(left.inboundTradeId === initialInboundTradeId))
+    : filteredFlows;
+  const actionCount = flows.filter(needsAction).length;
+  const readyForFillCount = flows.filter(flow => Boolean(flow.executionId) && flow.fills.length === 0).length;
+  const returnIssueCount = flows.filter(flow => flow.fills.some(fill =>
+    fill.returnStatus === "return_failed" || fill.returnStatus === "manual_return_required"
+  )).length;
+  const completedCount = flows.filter(completed).length;
 
   const updateFlow = (tradeId: string, updater: (flow: ExecutionFlowRecord) => ExecutionFlowRecord) => {
     setFlows(current => current.map(flow => flow.tradeId === tradeId ? updater(flow) : flow));
@@ -5102,11 +5141,94 @@ function Execution({ role, initialInboundTradeId }: { role: AccessRole; initialI
 
   return (
     <>
-      <PageTitle title="Execution Flow" subtitle="Validated trades, execution records, fills, and return status back to Vantage" />
+      <PageTitle title="Execution Flow" subtitle="Complete the fill and return it to Vantage" />
       {!canOperateExecution && <ReadOnlyNotice label="Execution status, fills, and return state are visible, but this role cannot create executions, add fills, confirm fills, or mark returns." />}
+
+      <ShellCard className="mb-4 overflow-hidden">
+        <div className="border-b border-slate-800 bg-gradient-to-r from-sky-500/[0.08] to-transparent px-5 py-4">
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-300">What to do here</p>
+              <h2 className="mt-1 text-base font-semibold text-white">Take a ready trade through execution and send the final fill back</h2>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+                Start with the next action shown on each trade. A trade is complete only after its fill is confirmed and returned to Vantage.
+              </p>
+            </div>
+            <div className="rounded-lg border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-right">
+              <p className="text-[10px] uppercase tracking-wide text-sky-300">Needs attention</p>
+              <p className="mt-0.5 text-xl font-semibold text-white">{actionCount}</p>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 divide-x divide-slate-800">
+          {[
+            ["1", "Create execution", "Open the execution record"],
+            ["2", "Record fill", "Enter quantity, price, and time"],
+            ["3", "Confirm fill", "Check the final fill details"],
+            ["4", "Return to Vantage", "Close the delivery loop"],
+          ].map(([number, title, description]) => (
+            <div key={number} className="px-4 py-3">
+              <div className="flex items-start gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-400/10 text-[11px] font-bold text-sky-300">{number}</span>
+                <div>
+                  <p className="text-xs font-semibold text-slate-100">{title}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ShellCard>
+
+      <div className="mb-4 grid grid-cols-4 gap-3">
+        {[
+          ["Action needed", actionCount, "bg-amber-400"],
+          ["Waiting for fill", readyForFillCount, "bg-sky-400"],
+          ["Return issues", returnIssueCount, "bg-rose-400"],
+          ["Completed", completedCount, "bg-emerald-400"],
+        ].map(([label, value, toneClass]) => (
+          <ShellCard key={label} className="px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+            <div className="mt-2 flex items-end justify-between">
+              <p className="text-2xl font-semibold text-white">{value}</p>
+              <span className={`h-2 w-2 rounded-full ${toneClass}`} />
+            </div>
+          </ShellCard>
+        ))}
+      </div>
+
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex rounded-lg border border-slate-800 bg-slate-950/40 p-1">
+          {([
+            ["action", `Needs action (${actionCount})`],
+            ["all", `All (${flows.length})`],
+            ["completed", `Completed (${completedCount})`],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setQueueFilter(value)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${queueFilter === value ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-200"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="relative w-80">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <input
+            value={executionSearch}
+            onChange={event => setExecutionSearch(event.target.value)}
+            placeholder="Search trade, ticker, asset, or broker"
+            className="h-9 w-full rounded-md border border-slate-800 bg-slate-950/50 pl-9 pr-3 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-sky-400/50"
+          />
+        </div>
+      </div>
+
       <div className="space-y-4">
         {visibleFlows.map((flow) => {
           const isTargetFlow = initialInboundTradeId === flow.inboundTradeId;
+          const primaryAction = executionPrimaryAction(flow);
+          const isWorkflowBlocked = flow.blockedStep === 2;
           return (
           <ShellCard
             key={flow.tradeId}
@@ -5125,6 +5247,65 @@ function Execution({ role, initialInboundTradeId }: { role: AccessRole; initialI
                 <Info label="Fill" value={executionFillSummary(flow)} />
                 <Info label="Return" value={executionReturnSummary(flow)} />
                 <Info label="Updated" value={flow.lastUpdate} />
+              </div>
+            </div>
+
+            <div className={`mt-4 flex items-center justify-between gap-4 rounded-lg border px-4 py-3 ${
+              isWorkflowBlocked
+                ? "border-amber-400/25 bg-amber-400/[0.08]"
+                : primaryAction === "View completed flow"
+                  ? "border-emerald-400/20 bg-emerald-400/[0.06]"
+                  : "border-sky-400/25 bg-sky-400/[0.07]"
+            }`}>
+              <div className="flex items-start gap-3">
+                {isWorkflowBlocked
+                  ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                  : primaryAction === "View completed flow"
+                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                    : <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />}
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Next action</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-100">
+                    {isWorkflowBlocked ? "Complete the workflow before creating the execution" : primaryAction}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {isWorkflowBlocked
+                      ? "This trade is not ready for a fill yet. Open its workflow case and clear the remaining requirement."
+                      : !flow.executionId
+                        ? "The trade is ready. Create its execution record to start the fill process."
+                        : flow.fills.length === 0
+                          ? "The execution exists. Add the fill received from the broker."
+                          : flow.fills.some(fill => fill.status === "pending")
+                            ? "Review the quantity, price, amount, and fill time before confirming."
+                            : flow.fills.some(fill => fill.returnStatus === "return_failed")
+                              ? "The fill could not be returned. Review the reason and try the delivery again."
+                              : flow.fills.some(fill => fill.returnStatus === "manual_return_required")
+                                ? "This broker requires a manual return. Complete it and mark the fill as returned."
+                                : flow.fills.some(fill => fill.returnStatus === "ready_to_return")
+                                  ? "The fill is confirmed and ready to be sent back to Vantage."
+                                  : "No more action is needed. The fill was returned to Vantage."}
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0">
+                {canOperateExecution && !flow.executionId && !isWorkflowBlocked && (
+                  <button onClick={() => createExecution(flow)} className="h-8 rounded-md bg-sky-500 px-4 text-xs font-semibold text-white">
+                    Create Execution
+                  </button>
+                )}
+                {canOperateExecution && flow.executionId && flow.fills.length === 0 && (
+                  <button onClick={() => setFillPanelFlow(flow)} className="h-8 rounded-md bg-sky-500 px-4 text-xs font-semibold text-white">
+                    Record Fill
+                  </button>
+                )}
+                {isWorkflowBlocked && (
+                  <button
+                    onClick={() => onOpenWorkflow?.(flow.tradeWorkflowId)}
+                    className="h-8 rounded-md border border-amber-400/30 px-4 text-xs font-semibold text-amber-200"
+                  >
+                    Open Workflow Case
+                  </button>
+                )}
               </div>
             </div>
 
@@ -5286,6 +5467,13 @@ function Execution({ role, initialInboundTradeId }: { role: AccessRole; initialI
           </ShellCard>
           );
         })}
+        {visibleFlows.length === 0 && (
+          <ShellCard className="p-10 text-center">
+            <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-300" />
+            <h3 className="mt-3 text-sm font-semibold text-white">No executions match this view</h3>
+            <p className="mt-1 text-xs text-slate-500">Try another filter or search term.</p>
+          </ShellCard>
+        )}
       </div>
       {canOperateExecution && fillPanelFlow && (
         <ExecutionFillPanel
@@ -6720,7 +6908,13 @@ export default function PatsPlatform() {
           {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} onOpenDestination={openWorkflowDestination} onOpenTrade={setSelectedTrade} />}
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} initialDocumentId={workflowDocumentTarget} />}
           {active === "households" && <Households role={activeRole} />}
-          {active === "execution" && <Execution role={activeRole} initialInboundTradeId={workflowExecutionTarget} />}
+          {active === "execution" && (
+            <Execution
+              role={activeRole}
+              initialInboundTradeId={workflowExecutionTarget}
+              onOpenWorkflow={() => setActive("workflows")}
+            />
+          )}
           {active === "userAccess" && <UserAccessPage users={localUserAccess} onUpdateUser={updateUserAccess} />}
           {active === "settings" && <SettingsPage />}
         </div>
