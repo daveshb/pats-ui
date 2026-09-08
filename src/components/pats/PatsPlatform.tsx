@@ -27,6 +27,7 @@ import {
   User,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 
 function loadLocal<T>(key: string, fallback: T): T {
@@ -283,7 +284,7 @@ interface ExecutionFlowRecord {
   quantity: string;
   amount: string;
   executionStatus: "not_created" | "pending" | "ready" | "routed" | "executed" | "failed" | "cancelled";
-  routeMethod?: "manual";
+  routeMethod?: "manual" | "automatic";
   externalExecutionId?: string;
   fills: ExecutionFill[];
   currentStep: number;
@@ -835,6 +836,7 @@ const tradeReviewCases: TradeReviewCase[] = [
 
 const executionFlows: ExecutionFlowRecord[] = [
   {
+    executionId: "ex_003",
     tradeWorkflowId: "tw_001",
     inboundTradeId: "it_d672e1c1",
     workflowTemplateId: "wt_tech_subscription",
@@ -845,12 +847,13 @@ const executionFlows: ExecutionFlowRecord[] = [
     side: "Subscribe",
     quantity: "10,000",
     amount: "$452,000",
-    executionStatus: "not_created",
+    executionStatus: "pending",
+    routeMethod: "automatic",
     fills: [],
-    currentStep: 3,
+    currentStep: 4,
     blockedStep: null,
     destination: "Vantage Blotter",
-    lastUpdate: "2 min ago",
+    lastUpdate: "Just now",
   },
   {
     tradeWorkflowId: "tw_002",
@@ -1100,7 +1103,7 @@ function executionReturnSummary(flow: ExecutionFlowRecord) {
 }
 
 function executionPrimaryAction(flow: ExecutionFlowRecord) {
-  if (!flow.executionId) return "Create execution";
+  if (!flow.executionId) return "Waiting for auto-creation";
   if (flow.fills.length === 0) return "Create fill";
   if (flow.fills.some(fill => fill.status === "pending")) return "Confirm fill";
   if (flow.fills.some(fill => fill.returnStatus === "ready_to_return")) return "Return to Vantage";
@@ -1358,6 +1361,19 @@ const notifications: NotificationItem[] = [
     actionRequired: false,
     primaryAction: "Open trade",
     targetNav: "trades",
+    audience: ["pats_ops", "broker", "wealth_manager"],
+  },
+  {
+    id: "notif-execution-auto-created",
+    category: "trade",
+    title: "Execution created automatically",
+    description: "TechCorp Series A finished its workflow, so PATS created the execution right away — no one had to open the trade.",
+    status: "unread",
+    severity: "success",
+    timestamp: "Just now",
+    actionRequired: true,
+    primaryAction: "Record fill",
+    targetNav: "execution",
     audience: ["pats_ops", "broker", "wealth_manager"],
   },
   {
@@ -3815,8 +3831,9 @@ function TradeWorkflowsView({
             </ShellCard>
 
             <div className="flex items-center justify-between rounded-md border border-slate-800 bg-[#0c1117] px-4 py-3">
-              <p className="text-xs text-slate-400">
-                After all required steps are completed, this trade moves to <span className="font-semibold text-emerald-300">ready for execution</span>.
+              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Zap className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
+                After all required steps are completed, PATS automatically creates the execution — <span className="font-semibold text-emerald-300">no manual step required</span>.
               </p>
               <button
                 type="button"
@@ -5149,9 +5166,9 @@ function Execution({
           <div className="flex items-start justify-between gap-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-300">What to do here</p>
-              <h2 className="mt-1 text-base font-semibold text-white">Take a ready trade through execution and send the final fill back</h2>
+              <h2 className="mt-1 text-base font-semibold text-white">PATS creates the execution automatically once a trade is ready</h2>
               <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
-                Start with the next action shown on each trade. A trade is complete only after its fill is confirmed and returned to Vantage.
+                Ops no longer has to open each ready trade to start it. From here, pick up where PATS left off: confirm the fill and return it to Vantage.
               </p>
             </div>
             <div className="rounded-lg border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-right">
@@ -5162,21 +5179,31 @@ function Execution({
         </div>
         <div className="grid grid-cols-4 divide-x divide-slate-800">
           {[
-            ["1", "Create execution", "Open the execution record"],
+            ["1", "Execution created", "PATS does this automatically once the workflow is done"],
             ["2", "Record fill", "Enter quantity, price, and time"],
             ["3", "Confirm fill", "Check the final fill details"],
             ["4", "Return to Vantage", "Close the delivery loop"],
-          ].map(([number, title, description]) => (
-            <div key={number} className="px-4 py-3">
-              <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-400/10 text-[11px] font-bold text-sky-300">{number}</span>
-                <div>
-                  <p className="text-xs font-semibold text-slate-100">{title}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
+          ].map(([number, title, description]) => {
+            const automatic = number === "1";
+            return (
+              <div key={number} className="px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${automatic ? "bg-emerald-400/10 text-emerald-300" : "bg-sky-400/10 text-sky-300"}`}>
+                    {automatic ? <Zap className="h-3 w-3" /> : number}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-slate-100">{title}</p>
+                      {automatic && (
+                        <span className="rounded border border-emerald-400/25 bg-emerald-400/10 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-emerald-300">Auto</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </ShellCard>
 
@@ -5239,6 +5266,11 @@ function Execution({
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-white">{flow.ticker}</span>
                   <StatusBadge value={flow.executionStatus} />
+                  {flow.routeMethod === "automatic" && (
+                    <span className="inline-flex items-center gap-1 rounded border border-emerald-400/25 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-300">
+                      <Zap className="h-2.5 w-2.5" /> Created automatically by PATS
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{flow.asset} · {flow.broker}</p>
               </div>
@@ -5262,17 +5294,19 @@ function Execution({
                   ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
                   : primaryAction === "View completed flow"
                     ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-                    : <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />}
+                    : !flow.executionId
+                      ? <Zap className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                      : <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />}
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Next action</p>
                   <p className="mt-0.5 text-sm font-semibold text-slate-100">
-                    {isWorkflowBlocked ? "Complete the workflow before creating the execution" : primaryAction}
+                    {isWorkflowBlocked ? "Complete the workflow before PATS can create the execution" : primaryAction}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
                     {isWorkflowBlocked
                       ? "This trade is not ready for a fill yet. Open its workflow case and clear the remaining requirement."
                       : !flow.executionId
-                        ? "The trade is ready. Create its execution record to start the fill process."
+                        ? "PATS will create the execution automatically the moment this trade's workflow is complete. You can still create it manually if it's taking longer than expected."
                         : flow.fills.length === 0
                           ? "The execution exists. Add the fill received from the broker."
                           : flow.fills.some(fill => fill.status === "pending")
@@ -5289,8 +5323,8 @@ function Execution({
               </div>
               <div className="shrink-0">
                 {canOperateExecution && !flow.executionId && !isWorkflowBlocked && (
-                  <button onClick={() => createExecution(flow)} className="h-8 rounded-md bg-sky-500 px-4 text-xs font-semibold text-white">
-                    Create Execution
+                  <button onClick={() => createExecution(flow)} className="h-8 rounded-md border border-slate-700 px-4 text-xs font-semibold text-slate-200 hover:border-sky-400/40 hover:text-sky-200">
+                    Create Manually
                   </button>
                 )}
                 {canOperateExecution && flow.executionId && flow.fills.length === 0 && (
@@ -5348,15 +5382,33 @@ function Execution({
                   <Route className="h-3.5 w-3.5 text-sky-300" />
                 </div>
                 <div className="mt-3 space-y-2">
-                  <Info label="Execution" value={flow.executionId ? "Created" : "Not created"} />
-                  <Info label="Route method" value={flow.routeMethod ? displayLabel(flow.routeMethod) : "Waiting"} />
+                  <Info
+                    label="Execution"
+                    value={
+                      !flow.executionId
+                        ? "Not created yet"
+                        : flow.routeMethod === "automatic"
+                          ? "Created automatically"
+                          : "Created manually"
+                    }
+                  />
+                  <div>
+                    <p className="text-[8px] font-semibold text-slate-600">Route method</p>
+                    <p className={`mt-1 flex items-center gap-1 text-[13px] font-semibold ${flow.routeMethod === "automatic" ? "text-emerald-300" : "text-slate-100"}`}>
+                      {flow.routeMethod === "automatic" && <Zap className="h-3 w-3" />}
+                      {flow.routeMethod ? displayLabel(flow.routeMethod) : "Waiting"}
+                    </p>
+                  </div>
                   <Info label="Vantage return" value={flow.externalExecutionId ? "Linked" : "Not linked"} />
                   <Info label="Action" value={executionPrimaryAction(flow)} />
                 </div>
                 {canOperateExecution && !flow.executionId && (
-                  <button onClick={() => createExecution(flow)} className="mt-4 h-8 w-full rounded-md bg-sky-500 text-xs font-semibold text-white">
-                    Create Execution
+                  <button onClick={() => createExecution(flow)} className="mt-4 h-8 w-full rounded-md border border-slate-700 text-xs font-semibold text-slate-200 hover:border-sky-400/40 hover:text-sky-200">
+                    Create Manually
                   </button>
+                )}
+                {flow.executionId && flow.routeMethod === "automatic" && (
+                  <p className="mt-3 text-[11px] text-slate-500">No Ops action was needed to reach this step.</p>
                 )}
               </div>
 
