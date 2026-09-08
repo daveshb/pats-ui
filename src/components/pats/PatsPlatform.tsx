@@ -28,6 +28,7 @@ import {
   Users,
   X,
   Zap,
+  Lock,
 } from "lucide-react";
 
 function loadLocal<T>(key: string, fallback: T): T {
@@ -125,6 +126,24 @@ interface Asset {
   notice: string;
   supply: string;
   units: string;
+}
+
+interface PrivateAssetValuationRecord {
+  valuationId: string;
+  privateAssetId: string;
+  value: number;
+  // The date this value is effective as of (e.g. a fund's quarter-end), not when it was entered.
+  asOfDate: string;
+  recordedBy: string;
+  notes?: string;
+  createdAt: string;
+}
+
+function formatUsdShort(value: number): string {
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${value.toFixed(0)}`;
 }
 
 interface HouseholdPerson {
@@ -325,6 +344,15 @@ const assets: Asset[] = [
   { privateAssetId: "pa_health_b", patsBrokerProfileId: "pbp_msalt", brokerScopedTickerId: "bst_health_b_ms", ticker: "HEALTH-B", name: "HealthTech Preferred", broker: "Morgan Stanley Alternatives", assetClass: "venture_capital", preceptAssetClass: "equity_alternatives", preceptStyle: "healthcare_growth", fundStructure: "3(c)(1), subscription", gpSponsor: "HealthTech Partners", liquidityTerms: "Quarterly windows", lockupPeriod: "12 months", noticePeriod: "60 days", taxDocumentSource: "Sponsor portal", documentExecutionPlatform: "iCapital", status: "active", className: "Venture Capital", structure: "3(c)(1)", sponsor: "HealthTech Partners", value: "$1.9M", liquidity: "Medium", lockup: "12 months", notice: "60 days", supply: "$8M", units: "31,000" },
   { privateAssetId: "pa_energy_c", patsBrokerProfileId: "pbp_jpm", brokerScopedTickerId: "bst_energy_c_jpm", ticker: "ENERGY-C", name: "CleanEnergy Fund", broker: "JP Morgan Private Markets", assetClass: "real_assets", preceptAssetClass: "real_assets", preceptStyle: "infrastructure_energy", fundStructure: "Evergreen", gpSponsor: "CleanEnergy GP", liquidityTerms: "Semi-annual liquidity", lockupPeriod: "18 months", noticePeriod: "45 days", taxDocumentSource: "UMB", documentExecutionPlatform: "Manual Upload", status: "restricted", className: "Real Assets", structure: "Evergreen", sponsor: "CleanEnergy GP", value: "$3.2M", liquidity: "Medium", lockup: "18 months", notice: "45 days", supply: "$15M", units: "62,500" },
   { privateAssetId: "pa_fintech_d", patsBrokerProfileId: "pbp_icap", brokerScopedTickerId: "bst_fintech_d_icap", ticker: "FINTECH-D", name: "FinTech Growth", broker: "iCapital Marketplace", assetClass: "private_credit", preceptAssetClass: "credit_alternatives", preceptStyle: "growth_credit", fundStructure: "Drawdown", gpSponsor: "FinTech Capital", liquidityTerms: "Monthly liquidity", lockupPeriod: "6 months", noticePeriod: "30 days", taxDocumentSource: "iCapital", documentExecutionPlatform: "iCapital", status: "active", className: "Private Credit", structure: "Drawdown", sponsor: "FinTech Capital", value: "$1.5M", liquidity: "High", lockup: "6 months", notice: "30 days", supply: "$6M", units: "18,200" },
+];
+
+// Every NAV update is its own entry - never a value that gets overwritten. Newest first.
+const privateAssetValuations: PrivateAssetValuationRecord[] = [
+  { valuationId: "paval_001", privateAssetId: "pa_tech_a", value: 2_400_000, asOfDate: "2026-06-30", recordedBy: "PATS Ops", notes: "Q2 mark from fund administrator", createdAt: "2026-07-05T14:00:00Z" },
+  { valuationId: "paval_002", privateAssetId: "pa_tech_a", value: 2_150_000, asOfDate: "2026-03-31", recordedBy: "PATS Ops", notes: "Q1 mark from fund administrator", createdAt: "2026-04-04T09:30:00Z" },
+  { valuationId: "paval_003", privateAssetId: "pa_tech_a", value: 1_980_000, asOfDate: "2025-12-31", recordedBy: "PATS Ops", notes: "Year-end mark", createdAt: "2026-01-08T11:15:00Z" },
+  { valuationId: "paval_004", privateAssetId: "pa_health_b", value: 1_900_000, asOfDate: "2026-06-30", recordedBy: "PATS Ops", notes: "Q2 mark from fund administrator", createdAt: "2026-07-06T10:00:00Z" },
+  { valuationId: "paval_005", privateAssetId: "pa_health_b", value: 1_720_000, asOfDate: "2026-03-31", recordedBy: "PATS Ops", createdAt: "2026-04-05T08:45:00Z" },
 ];
 
 const workflows = [
@@ -3116,21 +3144,26 @@ function Info({ label, value }: { label: string; value: string }) {
 function PrivateAssets({
   localAssets,
   localBrokers,
+  valuations,
   role,
   onAddAsset,
   onMapTicker,
+  onRecordValuation,
 }: {
   localAssets: Asset[];
   localBrokers: Broker[];
+  valuations: PrivateAssetValuationRecord[];
   role: AccessRole;
   onAddAsset: (asset: Asset) => void;
   onMapTicker: (assetId: string, ticker: string) => void;
+  onRecordValuation: (assetId: string, entry: { value: number; asOfDate: string; notes?: string }) => void;
 }) {
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [brokerFilter, setBrokerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [assetPanel, setAssetPanel] = useState<"create" | "resolution" | null>(null);
+  const [valuationAssetId, setValuationAssetId] = useState<string | null>(null);
   const canManageAssets = rolePermissions[role].canManageBrokers;
 
   const uniqueBrokers = Array.from(new Set(localAssets.map(a => a.broker)));
@@ -3256,6 +3289,48 @@ function PrivateAssets({
                         </div>
                       </div>
                     </div>
+                    {(() => {
+                      const assetValuations = [...valuations]
+                        .filter((v) => v.privateAssetId === asset.privateAssetId)
+                        .sort((a, b) => b.asOfDate.localeCompare(a.asOfDate));
+                      const latest = assetValuations[0];
+                      return (
+                        <div className="mt-5 border-t border-slate-800 pt-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-semibold text-slate-300">Valuation</p>
+                              <p className="mt-0.5 text-[11px] text-slate-500">
+                                {latest
+                                  ? `Current value ${formatUsdShort(latest.value)} as of ${latest.asOfDate}, recorded by ${latest.recordedBy}`
+                                  : "No valuation has been recorded for this asset yet."}
+                              </p>
+                            </div>
+                            {canManageAssets && (
+                              <button
+                                onClick={() => setValuationAssetId(asset.privateAssetId)}
+                                className="h-8 shrink-0 rounded-md border border-slate-700 px-3 text-xs font-semibold text-slate-200 hover:border-sky-400/40 hover:text-sky-200"
+                              >
+                                Record valuation
+                              </button>
+                            )}
+                          </div>
+                          {assetValuations.length > 0 && (
+                            <div className="mt-3 space-y-1.5">
+                              {assetValuations.map((v) => (
+                                <div key={v.valuationId} className="flex items-center justify-between rounded-md border border-slate-800 bg-[#101318] px-3 py-2 text-xs">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-semibold text-slate-100">{formatUsdShort(v.value)}</span>
+                                    <span className="text-slate-500">as of {v.asOfDate}</span>
+                                    {v.notes && <span className="text-slate-600">- {v.notes}</span>}
+                                  </div>
+                                  <span className="text-slate-500">{v.recordedBy}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -3276,7 +3351,67 @@ function PrivateAssets({
           onClose={() => setAssetPanel(null)}
         />
       )}
+      {valuationAssetId && (
+        <RecordValuationPanel
+          asset={localAssets.find((a) => a.privateAssetId === valuationAssetId)!}
+          onRecord={(entry) => { onRecordValuation(valuationAssetId, entry); setValuationAssetId(null); }}
+          onClose={() => setValuationAssetId(null)}
+        />
+      )}
     </>
+  );
+}
+
+function RecordValuationPanel({ asset, onRecord, onClose }: { asset: Asset; onRecord: (entry: { value: number; asOfDate: string; notes?: string }) => void; onClose: () => void }) {
+  const [value, setValue] = useState("");
+  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState("");
+  const numericValue = Number(value);
+  const canSubmit = value.trim() !== "" && !Number.isNaN(numericValue) && numericValue >= 0 && asOfDate.trim() !== "";
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+    onRecord({ value: numericValue, asOfDate, notes: notes.trim() || undefined });
+  };
+
+  return (
+    <DetailPanel title="Record Valuation" subtitle={`${asset.name} - current value ${asset.value}`} onClose={onClose}>
+      <div className="space-y-4">
+        <ShellCard className="p-4 text-xs leading-5 text-slate-400">
+          This adds a new entry to the valuation history - it never overwrites a past one. Once saved, this is what the current value is based on going forward.
+        </ShellCard>
+        <FormField label="New value (USD)">
+          <input
+            type="number"
+            min="0"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="2450000"
+            className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+          />
+        </FormField>
+        <FormField label="As of date">
+          <input
+            type="date"
+            value={asOfDate}
+            onChange={(e) => setAsOfDate(e.target.value)}
+            className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-100 outline-none focus:border-sky-500/60"
+          />
+        </FormField>
+        <FormField label="Notes (optional)">
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Q2 mark from fund administrator"
+            className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+          />
+        </FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button>
+          <button onClick={handleSubmit} disabled={!canSubmit} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:opacity-40">Save valuation</button>
+        </div>
+      </div>
+    </DetailPanel>
   );
 }
 
@@ -5410,6 +5545,11 @@ function Execution({
                 {flow.executionId && flow.routeMethod === "automatic" && (
                   <p className="mt-3 text-[11px] text-slate-500">No Ops action was needed to reach this step.</p>
                 )}
+                {flow.executionStatus === "executed" && (
+                  <p className="mt-3 flex items-center gap-1 text-[11px] text-slate-500">
+                    <Lock className="h-3 w-3" /> Executed — this can no longer be cancelled or reversed.
+                  </p>
+                )}
               </div>
 
               <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
@@ -6887,6 +7027,7 @@ export default function PatsPlatform() {
   const [localTrades, setLocalTrades] = useState<Trade[]>(() => loadLocal("pats_trades", trades));
   const [localBrokers, setLocalBrokers] = useState<Broker[]>(() => loadLocal("pats_brokers", brokers));
   const [localAssets, setLocalAssets] = useState<Asset[]>(() => loadLocal("pats_private_assets", assets));
+  const [localValuations, setLocalValuations] = useState<PrivateAssetValuationRecord[]>(() => loadLocal("pats_private_asset_valuations", privateAssetValuations));
   const [localDocs, setLocalDocs] = useState<TradeDoc[]>(() => mergeDocumentSeeds(loadLocal("pats_docs", tradeDocuments)));
   const [localWorkflows, setLocalWorkflows] = useState<WorkflowRecord[]>(() => loadLocal("pats_workflows", workflows));
   const [localUserAccess, setLocalUserAccess] = useState<UserAccessRequest[]>(() => loadLocal("pats_user_access", userAccessSeeds));
@@ -6904,6 +7045,26 @@ export default function PatsPlatform() {
     } : asset);
     setLocalAssets(n);
     saveLocal("pats_private_assets", n);
+  };
+  const recordAssetValuation = (assetId: string, entry: { value: number; asOfDate: string; notes?: string }) => {
+    // Append-only: this never edits a past entry, it only ever adds a new one.
+    const valuation: PrivateAssetValuationRecord = {
+      valuationId: `paval_mock_${Date.now().toString(36)}`,
+      privateAssetId: assetId,
+      value: entry.value,
+      asOfDate: entry.asOfDate,
+      recordedBy: "PATS Ops",
+      notes: entry.notes,
+      createdAt: new Date().toISOString(),
+    };
+    const nv = [valuation, ...localValuations];
+    setLocalValuations(nv);
+    saveLocal("pats_private_asset_valuations", nv);
+
+    // The asset's displayed value is just a cache of the latest entry above.
+    const na = localAssets.map((asset) => asset.privateAssetId === assetId ? { ...asset, value: formatUsdShort(entry.value) } : asset);
+    setLocalAssets(na);
+    saveLocal("pats_private_assets", na);
   };
   const addDoc = (d: TradeDoc) => { const n = [...localDocs, d]; setLocalDocs(n); saveLocal("pats_docs", n); };
   const updateDoc = (id: string, p: Partial<TradeDoc>) => { const n = localDocs.map(d => d.tradeDocumentId === id ? { ...d, ...p } : d); setLocalDocs(n); saveLocal("pats_docs", n); };
@@ -6956,7 +7117,7 @@ export default function PatsPlatform() {
           {active === "trades" && <TradeBlotter trades={localTrades} role={activeRole} openNewTrade={() => setNewTradeOpen(true)} openTrade={setSelectedTrade} openExternalTrade={setSelectedExternal} />}
           {active === "review" && <ReviewCenter role={activeRole} initialReviewId={workflowReviewTarget} />}
           {active === "brokers" && <Brokers brokers={localBrokers} role={activeRole} updateBroker={updateBroker} openNewBroker={() => setNewBrokerOpen(true)} />}
-          {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} />}
+          {active === "assets" && <PrivateAssets localAssets={localAssets} localBrokers={localBrokers} valuations={localValuations} role={activeRole} onAddAsset={addAsset} onMapTicker={mapAssetTicker} onRecordValuation={recordAssetValuation} />}
           {active === "workflows" && <Workflows workflows={localWorkflows} trades={localTrades} role={activeRole} onAddWorkflow={addWorkflow} onUpdateWorkflow={updateWorkflow} onOpenDestination={openWorkflowDestination} onOpenTrade={setSelectedTrade} />}
           {active === "documents" && <Documents docs={localDocs} activeRole={activeRole} onAddDoc={addDoc} onUpdateDoc={updateDoc} initialDocumentId={workflowDocumentTarget} />}
           {active === "households" && <Households role={activeRole} />}
