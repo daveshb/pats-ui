@@ -462,12 +462,19 @@ const privateAssetValuations: PrivateAssetValuationRecord[] = [
   { valuationId: "paval_005", privateAssetId: "pa_health_b", value: 1_720_000, asOfDate: "2026-03-31", recordedBy: "PATS Ops", createdAt: "2026-04-05T08:45:00Z" },
 ];
 
+// Templates route by (broker, asset class) now — never by one specific asset.
+// Any current or future broker-owned asset in that class picks up the
+// matching template automatically, with nothing to link by hand.
 const workflows = [
-  { id: "wt_tech_subscription", policy: "once_per_user", name: "TechCorp subscription workflow", type: "Subscription", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", broker: "Goldman Sachs Advisor Solutions", asset: "TechCorp Series A", status: "active", requirements: "4 requirements", updated: "12 min ago", focus: "Subscription agreement, investor signature, Ops approval", requirementTypes: ["document", "signature", "approval", "manual_review"] },
-  { id: "wt_health_redemption", policy: "every_trade", name: "HealthTech redemption workflow", type: "Redemption", patsBrokerProfileId: "pbp_msalt", privateAssetId: "pa_health_b", broker: "Morgan Stanley Alternatives", asset: "HealthTech Preferred", status: "active", requirements: "5 requirements", updated: "38 min ago", focus: "Notice period, liquidity review, broker approval", requirementTypes: ["notice_period_check", "liquidity_check", "document", "approval", "manual_review"] },
-  { id: "wt_fintech_subscription", policy: "once_per_user", name: "FinTech iCapital package", type: "Approval", patsBrokerProfileId: "pbp_icap", privateAssetId: "pa_fintech_d", broker: "iCapital Marketplace", asset: "FinTech Growth", status: "active", requirements: "3 requirements", updated: "1 hour ago", focus: "External platform, approval callback, manual review", requirementTypes: ["external_platform", "signature", "manual_review"] },
+  { id: "wt_tech_subscription", policy: "once_per_user", name: "Private Equity subscription workflow", type: "Subscription", patsBrokerProfileId: "pbp_gsas", assetClass: "private_equity", broker: "Goldman Sachs Advisor Solutions", status: "active", requirements: "4 requirements", updated: "12 min ago", focus: "Subscription agreement, investor signature, Ops approval", requirementTypes: ["document", "signature", "approval", "manual_review"] },
+  { id: "wt_health_redemption", policy: "every_trade", name: "Venture Capital redemption workflow", type: "Redemption", patsBrokerProfileId: "pbp_msalt", assetClass: "venture_capital", broker: "Morgan Stanley Alternatives", status: "active", requirements: "5 requirements", updated: "38 min ago", focus: "Notice period, liquidity review, broker approval", requirementTypes: ["notice_period_check", "liquidity_check", "document", "approval", "manual_review"] },
+  { id: "wt_fintech_subscription", policy: "once_per_user", name: "Private Credit iCapital package", type: "Approval", patsBrokerProfileId: "pbp_icap", assetClass: "private_credit", broker: "iCapital Marketplace", status: "active", requirements: "3 requirements", updated: "1 hour ago", focus: "External platform, approval callback, manual review", requirementTypes: ["external_platform", "signature", "manual_review"] },
 ];
 type WorkflowRecord = typeof workflows[number];
+
+function assetClassLabel(assetClass: string): string {
+  return privateAssetClassOptions.find((option) => option.value === assetClass)?.label ?? assetClass;
+}
 
 const tradeDocuments: TradeDoc[] = [
   { tradeDocumentId: "tdoc_001", inboundTradeId: "it_d672e1c1", tradeWorkflowId: "tw_001", tradeWorkflowStepId: "tws_doc_001", workflowRequirementId: "wr_subscription_agreement", patsBrokerProfileId: "pbp_gsas", privateAssetId: "pa_tech_a", userId: "user-456", accountId: "acc_001", name: "Subscription Agreement", type: "subscription_agreement", platform: "docusign", source: "system", status: "sent", requiredActorType: "client_signer", requiredActorId: "per_001", signerPersonId: "per_001", visibleToRoles: ["pats_ops", "broker", "wealth_manager", "client_signer"], actionRequired: true, actionLabel: "Sign document", assignee: "Sarah Chen", dueDate: "2026-05-22", externalEnvelopeId: "DS-44912", externalUrl: "https://demo.docusign.net/signing/example", sentAt: "2026-05-01T14:30:00Z", createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T14:30:00Z" },
@@ -2941,7 +2948,9 @@ function InactiveAssetPanel({ item }: { item: TradeReviewCase }) {
 
 function WorkflowErrorPanel({ item }: { item: TradeReviewCase }) {
   const [mode, setMode] = useState<"retry" | "inspect">("retry");
-  const workflow = workflows.find((w) => w.asset === item.privateAsset);
+  const assetObj = assets.find((a) => a.ticker === item.ticker);
+  // Routed by the asset's own (broker, class) — not by matching this specific asset.
+  const workflow = workflows.find((w) => w.assetClass === assetObj?.assetClass && w.patsBrokerProfileId === assetObj?.patsBrokerProfileId);
 
   return (
     <div>
@@ -3065,7 +3074,8 @@ function EligibilityErrorPanel({ item }: { item: TradeReviewCase }) {
   const accountObj = householdAccounts.find((a) => a.accountId === item.accountId);
   const accountHh = households.find((h) => h.householdId === accountObj?.householdId);
   const assetObj = assets.find((a) => a.ticker === item.ticker);
-  const workflowTemplate = workflows.find((w) => w.asset === item.privateAsset);
+  // Routed by the asset's own (broker, class) — not by matching this specific asset.
+  const workflowTemplate = workflows.find((w) => w.assetClass === assetObj?.assetClass && w.patsBrokerProfileId === assetObj?.patsBrokerProfileId);
 
   return (
     <div>
@@ -3329,7 +3339,8 @@ function PrivateAssets({
         <div className="divide-y divide-slate-800/90">
           {filteredAssets.map((asset) => {
             const isOpen = expandedAsset === asset.privateAssetId;
-            const workflow = workflows.find((flow) => flow.privateAssetId === asset.privateAssetId);
+            // Routed automatically by (broker, class) — this asset never had to be linked by hand.
+            const workflow = workflows.find((flow) => flow.assetClass === asset.assetClass && flow.patsBrokerProfileId === asset.patsBrokerProfileId);
             const workflowLabel = workflow ? displayLabel(workflow.policy) : "No workflow";
             const hasTickerMapping = Boolean(asset.ticker && asset.brokerScopedTickerId);
             const canTrade = asset.status === "active" && hasTickerMapping && workflow;
@@ -3697,8 +3708,8 @@ function WorkflowsLegacy() {
       <div className="grid grid-cols-[0.85fr_1.25fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-100">Workflow templates by asset</h2>
-            <p className="mt-1 text-[11px] text-slate-500">Each template belongs to a broker-owned private asset and controls repeated workflow behavior.</p>
+            <h2 className="text-sm font-semibold text-slate-100">Workflow templates by asset class</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Each template belongs to a broker + private asset class and covers every asset in it automatically.</p>
           </div>
           {workflows.map((flow) => (
             <div key={flow.id} className="border-t border-slate-800/80 px-5 py-4">
@@ -3709,7 +3720,7 @@ function WorkflowsLegacy() {
                     <StatusBadge value={flow.status} />
                   </div>
                   <h3 className="mt-2 text-sm font-semibold text-slate-100">{flow.name}</h3>
-                  <p className="mt-1 text-xs text-slate-500">{flow.broker} · {flow.asset}</p>
+                  <p className="mt-1 text-xs text-slate-500">{flow.broker} · {assetClassLabel(flow.assetClass)}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-semibold text-slate-300">{flow.requirements}</p>
@@ -4112,7 +4123,9 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
   const [workflowPanel, setWorkflowPanel] = useState<"template" | "requirement" | null>(null);
   const canManageWorkflows = rolePermissions[role].canManageWorkflows;
   const selectedWorkflow = localWorkflows.find((flow) => flow.id === selectedWorkflowId) ?? localWorkflows[0];
-  const selectedAsset = assets.find((asset) => asset.privateAssetId === selectedWorkflow?.privateAssetId);
+  const matchingAssets = assets.filter(
+    (asset) => asset.broker === selectedWorkflow?.broker && asset.assetClass === selectedWorkflow?.assetClass
+  );
   const selectedRequirements = (selectedWorkflow?.requirementTypes ?? []).map((type, index) => ({
     type,
     title: displayLabel(type),
@@ -4134,8 +4147,8 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
       <div className="grid grid-cols-[0.95fr_1.4fr] gap-5">
         <ShellCard className="overflow-hidden">
           <div className="border-b border-slate-800 bg-slate-950/60 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-100">Templates by private asset</h2>
-            <p className="mt-1 text-[11px] text-slate-500">One active template tells PATS what steps are needed for that broker-owned asset.</p>
+            <h2 className="text-sm font-semibold text-slate-100">Templates by broker + asset class</h2>
+            <p className="mt-1 text-[11px] text-slate-500">One active template automatically covers every asset of that class under that broker.</p>
           </div>
           <div className="divide-y divide-slate-800/80">
             {localWorkflows.map((flow) => {
@@ -4154,7 +4167,7 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
                       </div>
                       <h3 className="mt-2 text-sm font-semibold text-slate-100">{flow.name}</h3>
                       <p className="mt-1 text-xs text-slate-500">{flow.broker}</p>
-                      <p className="mt-0.5 text-xs font-semibold text-sky-300">{flow.asset}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-sky-300">{assetClassLabel(flow.assetClass)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold text-slate-300">{flow.requirements}</p>
@@ -4172,14 +4185,14 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selectedWorkflow.name}</h2>
-                <p className="mt-1 text-xs text-slate-500">{selectedWorkflow.broker} - {selectedWorkflow.asset}</p>
+                <p className="mt-1 text-xs text-slate-500">{selectedWorkflow.broker} - {assetClassLabel(selectedWorkflow.assetClass)}</p>
               </div>
               <StatusBadge value={selectedWorkflow.status} />
             </div>
             <div className="mt-5 grid grid-cols-4 gap-3">
               <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
-                <p className="text-[8px] font-semibold text-slate-600">Private asset</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{selectedWorkflow.asset}</p>
+                <p className="text-[8px] font-semibold text-slate-600">Asset class</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{assetClassLabel(selectedWorkflow.assetClass)}</p>
               </div>
               <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3">
                 <p className="text-[8px] font-semibold text-slate-600">Broker</p>
@@ -4196,8 +4209,22 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
             </div>
             <div className="mt-4 rounded-md border border-slate-800 bg-[#101318] p-3 text-xs text-slate-400">
               {selectedWorkflow.policy === "once_per_user"
-                ? "Once the user or account completes this workflow, future trades for this asset can skip the same steps through eligibility."
-                : "Every trade for this asset must complete these steps before it can move forward."}
+                ? "Once the user or account completes this workflow, future trades for this asset class can skip the same steps through eligibility."
+                : "Every trade for an asset in this class must complete these steps before it can move forward."}
+            </div>
+            <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/35 p-3">
+              <p className="text-[8px] font-semibold text-slate-600">Assets covered right now</p>
+              {matchingAssets.length === 0 ? (
+                <p className="mt-1 text-xs text-slate-500">No existing assets match yet — the next one created in this class picks it up automatically.</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {matchingAssets.map((asset) => (
+                    <span key={asset.privateAssetId} className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-300">
+                      {asset.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </ShellCard>
 
@@ -4234,10 +4261,10 @@ function WorkflowTemplateSetup({ workflows: localWorkflows, role, onAddWorkflow,
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Info label="Document platform" value={selectedAsset?.documentExecutionPlatform ?? "Not set"} />
-              <Info label="Tax document source" value={selectedAsset?.taxDocumentSource ?? "Not set"} />
-            </div>
+            <p className="mt-4 text-[11px] text-slate-500">
+              Document platform and tax source come from each individual asset&apos;s own record, not from the template —
+              they can differ between assets that share this same class.
+            </p>
           </ShellCard>
         </div>
       </div>
@@ -4316,25 +4343,27 @@ function Workflows({
 function CreateWorkflowTemplatePanel({ onAdd, onClose }: { onAdd: (w: WorkflowRecord) => void; onClose: () => void }) {
   const activeBrokers = brokers.filter(b => b.status === "Active");
   const [selectedBroker, setSelectedBroker] = useState(activeBrokers[0]?.name ?? "");
-  const [selectedAsset, setSelectedAsset] = useState(assets[0]?.name ?? "");
+  const [selectedAssetClass, setSelectedAssetClass] = useState(privateAssetClassOptions[0]?.value ?? "private_equity");
   const [templateName, setTemplateName] = useState("");
   const [policy, setPolicy] = useState<"once_per_user" | "every_trade">("once_per_user");
+
+  const matchingAssetsCount = assets.filter(
+    (a) => a.broker === selectedBroker && a.assetClass === selectedAssetClass
+  ).length;
 
   const handleCreate = () => {
     if (!templateName.trim()) return;
     const broker = brokers.find(b => b.name === selectedBroker);
-    const asset = assets.find(a => a.name === selectedAsset);
     onAdd({
       id: `wt_${Date.now()}`,
       name: templateName.trim(),
       broker: selectedBroker,
-      asset: selectedAsset,
-      privateAssetId: asset?.privateAssetId ?? "",
+      assetClass: selectedAssetClass,
       patsBrokerProfileId: broker?.patsBrokerProfileId ?? "",
       type: "Subscription",
       policy,
       status: "active",
-      focus: `Workflow for ${selectedAsset}`,
+      focus: `Workflow for ${assetClassLabel(selectedAssetClass)}`,
       requirements: "0 requirements",
       requirementTypes: [],
       updated: "Just now",
@@ -4343,23 +4372,28 @@ function CreateWorkflowTemplatePanel({ onAdd, onClose }: { onAdd: (w: WorkflowRe
   };
 
   return (
-    <DetailPanel title="Create Workflow Template" subtitle="Define the workflow rules for one broker-owned private asset" onClose={onClose}>
+    <DetailPanel title="Create Workflow Template" subtitle="Define the workflow rules for a broker + asset class — every asset in that category picks it up automatically" onClose={onClose}>
       <div className="space-y-4">
         <ShellCard className="p-4">
-          <h3 className="text-sm font-semibold text-white">Template owner</h3>
-          <p className="mt-1 text-xs text-slate-500">A workflow template must belong to one broker and one private asset.</p>
+          <h3 className="text-sm font-semibold text-white">Template scope</h3>
+          <p className="mt-1 text-xs text-slate-500">A workflow template belongs to one broker and one private asset class — not to a single asset. No one has to link new assets to it by hand.</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Broker">
               <select className={compactInputClass} value={selectedBroker} onChange={e => setSelectedBroker(e.target.value)}>
                 {activeBrokers.map(b => <option key={b.patsBrokerProfileId}>{b.name}</option>)}
               </select>
             </FormField>
-            <FormField label="Private asset">
-              <select className={compactInputClass} value={selectedAsset} onChange={e => setSelectedAsset(e.target.value)}>
-                {assets.map(a => <option key={a.privateAssetId}>{a.name}</option>)}
+            <FormField label="Private asset class">
+              <select className={compactInputClass} value={selectedAssetClass} onChange={e => setSelectedAssetClass(e.target.value as Asset["assetClass"])}>
+                {privateAssetClassOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </FormField>
           </div>
+          <p className="mt-3 text-[11px] text-slate-500">
+            {matchingAssetsCount > 0
+              ? `Applies immediately to ${matchingAssetsCount} existing ${matchingAssetsCount === 1 ? "asset" : "assets"} under this broker, plus any future one in this class.`
+              : "No existing assets match this broker + class yet — this template is ready for the next one that does."}
+          </p>
         </ShellCard>
 
         <ShellCard className="p-4">
@@ -4403,7 +4437,7 @@ function AddWorkflowRequirementPanel({ workflow, onUpdate, onClose }: { workflow
           <h3 className="text-sm font-semibold text-white">Selected template</h3>
           <div className="mt-4 grid grid-cols-2 gap-4">
             <Info label="Template" value={workflow.name} />
-            <Info label="Private asset" value={workflow.asset} />
+            <Info label="Asset class" value={assetClassLabel(workflow.assetClass)} />
             <Info label="Broker" value={workflow.broker} />
             <Info label="Policy" value={displayLabel(workflow.policy)} />
           </div>
