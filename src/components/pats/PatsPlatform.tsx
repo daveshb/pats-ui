@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useContext, useEffect, createContext, type ReactNode } from "react";
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -29,6 +29,7 @@ import {
   X,
   Zap,
   Lock,
+  RefreshCw,
 } from "lucide-react";
 
 function loadLocal<T>(key: string, fallback: T): T {
@@ -37,6 +38,112 @@ function loadLocal<T>(key: string, fallback: T): T {
 }
 function saveLocal<T>(key: string, value: T) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Global toast/snackbar system. Any component can call useToast().showToast(...)
+// without prop-drilling — this is the design language for transient feedback,
+// most importantly the "someone else changed this, reload and try again"
+// version-conflict error that optimistic locking can now produce.
+// ---------------------------------------------------------------------------
+type ToastTone = "success" | "error" | "info";
+interface ToastItem {
+  id: string;
+  tone: ToastTone;
+  title: string;
+  description?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+type ShowToastInput = Omit<ToastItem, "id">;
+interface ToastContextValue {
+  showToast: (toast: ShowToastInput) => void;
+  dismissToast: (id: string) => void;
+}
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+function useToast(): ToastContextValue {
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error("useToast must be used within a ToastProvider");
+  return ctx;
+}
+
+function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const showToast = useCallback((toast: ShowToastInput) => {
+    const id = nextMockId("toast");
+    setToasts((current) => [...current, { ...toast, id }]);
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ showToast, dismissToast }}>
+      {children}
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+    </ToastContext.Provider>
+  );
+}
+
+function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
+  useEffect(() => {
+    const timeout = setTimeout(() => onDismiss(toast.id), toast.actionLabel ? 9000 : 5500);
+    return () => clearTimeout(timeout);
+  }, [toast.id, toast.actionLabel, onDismiss]);
+
+  const tone = {
+    success: { border: "border-emerald-400/30", bg: "bg-emerald-400/10", icon: "text-emerald-300", Icon: CheckCircle2 },
+    error: { border: "border-rose-400/30", bg: "bg-rose-400/10", icon: "text-rose-300", Icon: AlertTriangle },
+    info: { border: "border-sky-400/30", bg: "bg-sky-400/10", icon: "text-sky-300", Icon: Bell },
+  }[toast.tone];
+  const Icon = tone.Icon;
+
+  return (
+    <div className={`pointer-events-auto flex w-80 items-start gap-2.5 rounded-md border ${tone.border} ${tone.bg} p-3 shadow-lg shadow-slate-950/50 backdrop-blur`}>
+      <Icon className={`mt-0.5 h-4 w-4 flex-shrink-0 ${tone.icon}`} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-white">{toast.title}</p>
+        {toast.description && <p className="mt-0.5 text-[11px] leading-snug text-slate-300">{toast.description}</p>}
+        {toast.actionLabel && (
+          <button
+            onClick={() => { toast.onAction?.(); onDismiss(toast.id); }}
+            className={`mt-2 inline-flex items-center gap-1 rounded-md border ${tone.border} px-2 py-1 text-[11px] font-semibold ${tone.icon} hover:bg-white/5`}
+          >
+            <RefreshCw className="h-3 w-3" /> {toast.actionLabel}
+          </button>
+        )}
+      </div>
+      <button onClick={() => onDismiss(toast.id)} aria-label="Dismiss notification" className="text-slate-500 hover:text-slate-300">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ToastViewport({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: string) => void }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="pointer-events-none fixed right-4 top-4 z-[100] flex flex-col gap-2.5">
+      {toasts.map((toast) => <ToastCard key={toast.id} toast={toast} onDismiss={onDismiss} />)}
+    </div>
+  );
+}
+
+// Standard copy for the optimistic-locking conflict error every write-path
+// (executions, fills, workflows, documents, eligibility, private assets, ...)
+// can now return. Kept in one place so the wording stays consistent wherever
+// it's triggered from.
+function showVersionConflictToast(showToast: ToastContextValue["showToast"], onReload?: () => void) {
+  showToast({
+    tone: "error",
+    title: "This record was changed by someone else",
+    description: "Reload it and try again — your change was not saved.",
+    actionLabel: "Reload",
+    onAction: onReload,
+  });
 }
 
 type NavKey =
@@ -3368,10 +3475,16 @@ function RecordValuationPanel({ asset, onRecord, onClose }: { asset: Asset; onRe
   const [notes, setNotes] = useState("");
   const numericValue = Number(value);
   const canSubmit = value.trim() !== "" && !Number.isNaN(numericValue) && numericValue >= 0 && asOfDate.trim() !== "";
+  const { showToast } = useToast();
 
   const handleSubmit = () => {
     if (!canSubmit) return;
     onRecord({ value: numericValue, asOfDate, notes: notes.trim() || undefined });
+    showToast({
+      tone: "success",
+      title: "Valuation recorded",
+      description: `Added a new history entry for ${asset.name} — the previous value wasn't overwritten.`,
+    });
   };
 
   return (
@@ -3438,7 +3551,6 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
   const [noticePeriod, setNoticePeriod] = useState("");
   const [taxDocumentSource, setTaxDocumentSource] = useState("");
   const [documentExecutionPlatform, setDocumentExecutionPlatform] = useState("");
-  const [value, setValue] = useState("");
   const [supply, setSupply] = useState("");
   const [units, setUnits] = useState("");
 
@@ -3467,7 +3579,7 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
       className: assetClassLabel,
       structure: fundStructure || "Not specified",
       sponsor: gpSponsor || "Not specified",
-      value: value || "$0",
+      value: "Not yet valued",
       liquidity: "Low",
       lockup: lockupPeriod || "Not specified",
       notice: noticePeriod || "Not specified",
@@ -3504,11 +3616,13 @@ function CreatePrivateAssetPanel({ brokers: brokerOptions, onAdd, onClose }: { b
         </ShellCard>
         <ShellCard className="p-4">
           <h3 className="text-sm font-semibold text-white">Position metadata</h3>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <FormField label="Value"><input className={compactInputClass} value={value} onChange={(event) => setValue(event.target.value)} placeholder="$2.4M" /></FormField>
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <FormField label="Supply"><input className={compactInputClass} value={supply} onChange={(event) => setSupply(event.target.value)} placeholder="$12M" /></FormField>
             <FormField label="Units"><input className={compactInputClass} value={units} onChange={(event) => setUnits(event.target.value)} placeholder="48,000" /></FormField>
           </div>
+          <p className="mt-3 text-[11px] text-slate-500">
+            Value isn&apos;t set here — once the asset is created, record its first valuation from the asset detail page. Every update becomes a new history entry, never an overwrite.
+          </p>
         </ShellCard>
         <div className="grid grid-cols-2 gap-3"><button onClick={onClose} className="h-9 rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-200">Cancel</button><button onClick={handleCreate} disabled={!brokerName || !name.trim()} className="h-9 rounded-md bg-sky-500 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Create asset</button></div>
       </div>
@@ -5215,6 +5329,7 @@ function Execution({
   const [queueFilter, setQueueFilter] = useState<"action" | "all" | "completed">("action");
   const [executionSearch, setExecutionSearch] = useState("");
   const canOperateExecution = rolePermissions[role].canOperateExecution;
+  const { showToast } = useToast();
   const needsAction = (flow: ExecutionFlowRecord) =>
     !flow.executionId ||
     flow.fills.length === 0 ||
@@ -5263,6 +5378,31 @@ function Execution({
       blockedStep: null,
       lastUpdate: "Just now",
     }));
+  };
+
+  // Mirrors the backend guard: an executed execution rejects the cancel
+  // attempt instead of hiding the button, so the button stays visible (but
+  // styled as blocked) and clicking it demonstrates the actual rejection.
+  const cancelExecution = (flow: ExecutionFlowRecord) => {
+    if (flow.executionStatus === "executed") {
+      showToast({
+        tone: "error",
+        title: "Executed executions cannot be cancelled",
+        description: "This execution already completed and can no longer be reversed.",
+      });
+      return;
+    }
+    updateFlow(flow.tradeId, current => ({ ...current, executionStatus: "cancelled", lastUpdate: "Just now" }));
+    showToast({ tone: "success", title: "Execution cancelled" });
+  };
+
+  const confirmFill = (tradeId: string, fillId: string) => {
+    updateFill(tradeId, fillId, current => ({ ...current, status: "confirmed", returnStatus: "ready_to_return" }));
+    showToast({
+      tone: "success",
+      title: "Fill confirmed",
+      description: "Confirming again won't re-send this to the broker — it's a one-time action.",
+    });
   };
 
   const addFill = (tradeId: string, fill: ExecutionFill) => {
@@ -5545,10 +5685,38 @@ function Execution({
                 {flow.executionId && flow.routeMethod === "automatic" && (
                   <p className="mt-3 text-[11px] text-slate-500">No Ops action was needed to reach this step.</p>
                 )}
+                {canOperateExecution && flow.executionId && flow.executionStatus !== "cancelled" && (
+                  <button
+                    onClick={() => cancelExecution(flow)}
+                    title={flow.executionStatus === "executed" ? "Executed executions cannot be cancelled" : undefined}
+                    className={`mt-3 h-8 w-full rounded-md border text-xs font-semibold ${
+                      flow.executionStatus === "executed"
+                        ? "cursor-not-allowed border-slate-800 text-slate-600"
+                        : "border-rose-400/30 text-rose-300 hover:bg-rose-400/10"
+                    }`}
+                  >
+                    {flow.executionStatus === "executed" ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3" /> Cancel Execution</span> : "Cancel Execution"}
+                  </button>
+                )}
                 {flow.executionStatus === "executed" && (
                   <p className="mt-3 flex items-center gap-1 text-[11px] text-slate-500">
                     <Lock className="h-3 w-3" /> Executed — this can no longer be cancelled or reversed.
                   </p>
+                )}
+                {flow.executionStatus === "cancelled" && (
+                  <p className="mt-3 flex items-center gap-1 text-[11px] text-slate-500">
+                    <Lock className="h-3 w-3" /> Cancelled — this execution will not be routed.
+                  </p>
+                )}
+                {canOperateExecution && (
+                  <button
+                    onClick={() => showVersionConflictToast(showToast, () =>
+                      showToast({ tone: "info", title: "Reloaded", description: "This would refetch the latest version of this execution from the server." })
+                    )}
+                    className="mt-3 w-full text-[10px] font-medium text-slate-600 underline decoration-dotted hover:text-slate-400"
+                  >
+                    Simulate a version conflict (design reference)
+                  </button>
                 )}
               </div>
 
@@ -5587,7 +5755,7 @@ function Execution({
                         <div className="mt-3 flex flex-wrap gap-2">
                           {fill.status === "pending" && (
                             <button
-                              onClick={() => updateFill(flow.tradeId, fill.fillId, current => ({ ...current, status: "confirmed", returnStatus: "ready_to_return" }))}
+                              onClick={() => confirmFill(flow.tradeId, fill.fillId)}
                               className="h-7 rounded-md bg-emerald-500 px-3 text-[11px] font-semibold text-white"
                             >
                               Confirm Fill
@@ -7093,6 +7261,7 @@ export default function PatsPlatform() {
   };
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-[#080a0d] font-sans text-slate-100 [font-feature-settings:'tnum']">
       <Sidebar active={active} role={activeRole} onSelect={selectNav} />
       <TopBar
@@ -7137,5 +7306,6 @@ export default function PatsPlatform() {
       {newTradeOpen && rolePermissions[activeRole].canCreateTrades && <NewTradePanel allTrades={localTrades} onAdd={addTrade} onClose={() => setNewTradeOpen(false)} />}
       {newBrokerOpen && rolePermissions[activeRole].canManageBrokers && <ConfigureBrokerPanel onAdd={addBroker} onClose={() => setNewBrokerOpen(false)} />}
     </div>
+    </ToastProvider>
   );
 }
