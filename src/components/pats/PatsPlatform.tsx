@@ -17,6 +17,7 @@ import {
   FileText,
   Filter,
   LayoutDashboard,
+  LayoutGrid,
   ListChecks,
   Plus,
   Route,
@@ -3779,7 +3780,290 @@ function WorkflowsLegacy() {
   );
 }
 
-type WorkflowPageTab = "trades" | "setup";
+type WorkflowPageTab = "board" | "trades" | "setup";
+
+// ---------------------------------------------------------------------------
+// Trade Workflow Board (HU-F8) — CRM-style pipeline view of every open trade
+// workflow, grouped by status. Backed in production by GET /trade-workflows
+// (see trade-workflow-board.mapper.ts): one lightweight card per workflow with
+// its progress and current step, not the full step list. This is the view Ops
+// opens when a fund event brings in many investors at once (a capital call or
+// a redemption window) and they need to see who is stuck where at a glance —
+// the per-trade drill-down with the full step list stays on the Trade
+// Workflows tab.
+// ---------------------------------------------------------------------------
+interface TradeWorkflowBoardCard {
+  tradeWorkflowId: string;
+  inboundTradeId: string;
+  status: MockTradeWorkflowStatus;
+  investor: string;
+  accountId: string;
+  side: "Subscribe" | "Redeem";
+  amount: string;
+  assetName: string;
+  assetTicker: string;
+  brokerName: string;
+  brokerAbbreviation: string;
+  templateName: string;
+  progress: { completed: number; total: number };
+  currentStep: { title: string; type: string } | null;
+  updated: string;
+}
+
+// Three concurrent fund events, each with several investors at different
+// steps — deliberately shaped so filtering by fund shows exactly the "many
+// clients, one fund" scenario the HU calls out.
+const tradeWorkflowBoardItems: TradeWorkflowBoardCard[] = [
+  { tradeWorkflowId: "tw_101", inboundTradeId: "it_d672e1c1", status: "in_progress", investor: "Sarah Chen", accountId: "acct-456", side: "Subscribe", amount: "$452,000", assetName: "TechCorp Series A", assetTicker: "TECH-A", brokerName: "Goldman Sachs Advisor Solutions", brokerAbbreviation: "GSAS", templateName: "Private Equity subscription workflow", progress: { completed: 1, total: 4 }, currentStep: { title: "Investor signature", type: "Signature" }, updated: "6 min ago" },
+  { tradeWorkflowId: "tw_102", inboundTradeId: "it_9f21ac04", status: "needs_action", investor: "Marcus Webb", accountId: "acct-771", side: "Subscribe", amount: "$300,000", assetName: "TechCorp Series A", assetTicker: "TECH-A", brokerName: "Goldman Sachs Advisor Solutions", brokerAbbreviation: "GSAS", templateName: "Private Equity subscription workflow", progress: { completed: 0, total: 4 }, currentStep: { title: "Subscription agreement", type: "Document" }, updated: "2 min ago" },
+  { tradeWorkflowId: "tw_103", inboundTradeId: "it_3b77e912", status: "in_progress", investor: "Elena Torres", accountId: "acct-882", side: "Subscribe", amount: "$610,000", assetName: "TechCorp Series A", assetTicker: "TECH-A", brokerName: "Goldman Sachs Advisor Solutions", brokerAbbreviation: "GSAS", templateName: "Private Equity subscription workflow", progress: { completed: 2, total: 4 }, currentStep: { title: "Broker approval", type: "Approval" }, updated: "22 min ago" },
+  { tradeWorkflowId: "tw_104", inboundTradeId: "it_5a1fd220", status: "blocked", investor: "David Kim", accountId: "acct-903", side: "Subscribe", amount: "$275,000", assetName: "TechCorp Series A", assetTicker: "TECH-A", brokerName: "Goldman Sachs Advisor Solutions", brokerAbbreviation: "GSAS", templateName: "Private Equity subscription workflow", progress: { completed: 1, total: 4 }, currentStep: { title: "Accredited investor letter", type: "Document" }, updated: "41 min ago" },
+  { tradeWorkflowId: "tw_105", inboundTradeId: "it_77c40a56", status: "completed", investor: "Priya Patel", accountId: "acct-914", side: "Subscribe", amount: "$500,000", assetName: "TechCorp Series A", assetTicker: "TECH-A", brokerName: "Goldman Sachs Advisor Solutions", brokerAbbreviation: "GSAS", templateName: "Private Equity subscription workflow", progress: { completed: 4, total: 4 }, currentStep: null, updated: "1 hour ago" },
+  { tradeWorkflowId: "tw_106", inboundTradeId: "it_cb41f317", status: "blocked", investor: "James Whitfield", accountId: "acct-231", side: "Redeem", amount: "$642,500", assetName: "HealthTech Preferred", assetTicker: "HEALTH-B", brokerName: "Morgan Stanley Alternatives", brokerAbbreviation: "MSALT", templateName: "Venture Capital redemption workflow", progress: { completed: 0, total: 5 }, currentStep: { title: "Redemption notice", type: "Document" }, updated: "14 min ago" },
+  { tradeWorkflowId: "tw_107", inboundTradeId: "it_1d68af90", status: "in_progress", investor: "Laura Bennett", accountId: "acct-347", side: "Redeem", amount: "$318,000", assetName: "HealthTech Preferred", assetTicker: "HEALTH-B", brokerName: "Morgan Stanley Alternatives", brokerAbbreviation: "MSALT", templateName: "Venture Capital redemption workflow", progress: { completed: 3, total: 5 }, currentStep: { title: "Liquidity review", type: "Review" }, updated: "9 min ago" },
+  { tradeWorkflowId: "tw_108", inboundTradeId: "it_7bd6a44f", status: "needs_action", investor: "Omar Haddad", accountId: "acct-560", side: "Subscribe", amount: "$180,000", assetName: "FinTech Growth", assetTicker: "FINTECH-D", brokerName: "iCapital Marketplace", brokerAbbreviation: "ICAP", templateName: "Private Credit iCapital package", progress: { completed: 0, total: 3 }, currentStep: { title: "External platform submission", type: "External platform" }, updated: "31 min ago" },
+  { tradeWorkflowId: "tw_109", inboundTradeId: "it_4f902ce3", status: "completed", investor: "Grace Liu", accountId: "acct-612", side: "Subscribe", amount: "$225,000", assetName: "FinTech Growth", assetTicker: "FINTECH-D", brokerName: "iCapital Marketplace", brokerAbbreviation: "ICAP", templateName: "Private Credit iCapital package", progress: { completed: 3, total: 3 }, currentStep: null, updated: "3 hours ago" },
+];
+
+const boardColumns: Array<{ key: MockTradeWorkflowStatus; label: string }> = [
+  { key: "needs_action", label: "Needs action" },
+  { key: "in_progress", label: "In progress" },
+  { key: "blocked", label: "Blocked" },
+  { key: "completed", label: "Completed" },
+];
+
+function boardCardProgressPercent(card: TradeWorkflowBoardCard): number {
+  return card.progress.total === 0 ? 0 : Math.round((card.progress.completed / card.progress.total) * 100);
+}
+
+function TradeWorkflowBoardCardTile({ card, onOpen }: { card: TradeWorkflowBoardCard; onOpen: () => void }) {
+  const percent = boardCardProgressPercent(card);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`w-full rounded-lg border p-3 text-left transition hover:bg-slate-900/60 ${
+        card.status === "blocked" ? "border-rose-400/25 bg-rose-400/5 hover:border-rose-400/40" : "border-slate-800 bg-[#101318] hover:border-sky-500/40"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-slate-100">{card.investor}</span>
+        <StatusBadge value={card.side} />
+      </div>
+      <p className="mt-1 truncate text-[11px] text-slate-500">
+        {card.assetName} · <span className="font-semibold text-sky-300">{card.assetTicker}</span>
+      </p>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-600">
+        <span>{card.brokerAbbreviation} · {card.accountId}</span>
+        <span className="font-semibold text-slate-400">{card.amount}</span>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-slate-500">{card.progress.completed}/{card.progress.total} steps</span>
+          <span className="font-semibold text-slate-300">{percent}%</span>
+        </div>
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full rounded-full bg-sky-400" style={{ width: `${percent}%` }} />
+        </div>
+      </div>
+      {card.currentStep ? (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+          <Clock3 className="h-3 w-3 shrink-0 text-sky-400" />
+          <span className="truncate">Waiting: {card.currentStep.title}</span>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-400">
+          <CheckCircle2 className="h-3 w-3 shrink-0" />All steps complete
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-slate-600">Updated {card.updated}</p>
+    </button>
+  );
+}
+
+function TradeWorkflowBoardCardDetails({ card, onClose }: { card: TradeWorkflowBoardCard; onClose: () => void }) {
+  const percent = boardCardProgressPercent(card);
+  return (
+    <DetailPanel title={card.investor} subtitle={`${card.assetName} · ${card.assetTicker}`} onClose={onClose}>
+      <ShellCard className="mb-5 p-6">
+        <p className="text-sm text-slate-500">Current status</p>
+        <div className="mt-5"><StatusBadge value={displayLabel(card.status)} /></div>
+      </ShellCard>
+      <ShellCard className="mb-5 p-6">
+        <h3 className="mb-5 text-lg font-semibold text-white">Trade & routing</h3>
+        <div className="grid grid-cols-2 gap-5">
+          <Info label="Side / amount" value={`${card.side} · ${card.amount}`} />
+          <Info label="Account" value={card.accountId} />
+          <Info label="Broker" value={`${card.brokerName} (${card.brokerAbbreviation})`} />
+          <Info label="Template" value={card.templateName} />
+        </div>
+      </ShellCard>
+      <ShellCard className="p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Workflow progress</h3>
+          <span className="text-lg font-semibold text-white">{percent}%</span>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">{card.progress.completed} of {card.progress.total} required steps completed</p>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full rounded-full bg-sky-400" style={{ width: `${percent}%` }} />
+        </div>
+        {card.currentStep ? (
+          <div className="mt-4 rounded-md border border-sky-400/20 bg-sky-400/5 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-300">Current step</p>
+            <p className="mt-1 text-sm font-semibold text-white">{card.currentStep.title}</p>
+            <p className="mt-1 text-xs text-slate-500">{card.currentStep.type}</p>
+          </div>
+        ) : (
+          <div className="mt-4 flex items-center gap-2 rounded-md border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm font-semibold text-emerald-300">
+            <CheckCircle2 className="h-4 w-4" />All required steps are complete
+          </div>
+        )}
+        <p className="mt-4 text-[11px] text-slate-600">
+          Updated {card.updated}. Open the Trade Workflows tab for this investor&apos;s full, step-by-step breakdown.
+        </p>
+      </ShellCard>
+    </DetailPanel>
+  );
+}
+
+function TradeWorkflowBoardView() {
+  const [statusFilter, setStatusFilter] = useState<"all" | MockTradeWorkflowStatus>("all");
+  const [fundFilter, setFundFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"updated" | "investor" | "status">("updated");
+  const [selectedCard, setSelectedCard] = useState<TradeWorkflowBoardCard | null>(null);
+
+  const funds = Array.from(new Set(tradeWorkflowBoardItems.map((item) => item.assetTicker))).map((ticker) => {
+    const item = tradeWorkflowBoardItems.find((i) => i.assetTicker === ticker)!;
+    return { ticker, name: item.assetName, count: tradeWorkflowBoardItems.filter((i) => i.assetTicker === ticker).length };
+  });
+
+  const counts = {
+    needs_action: tradeWorkflowBoardItems.filter((c) => c.status === "needs_action").length,
+    in_progress: tradeWorkflowBoardItems.filter((c) => c.status === "in_progress").length,
+    blocked: tradeWorkflowBoardItems.filter((c) => c.status === "blocked").length,
+    completed: tradeWorkflowBoardItems.filter((c) => c.status === "completed").length,
+  };
+
+  const term = search.trim().toLowerCase();
+  const filtered = tradeWorkflowBoardItems.filter((card) => {
+    if (fundFilter !== "all" && card.assetTicker !== fundFilter) return false;
+    if (statusFilter !== "all" && card.status !== statusFilter) return false;
+    if (!term) return true;
+    return [card.investor, card.accountId, card.assetName, card.assetTicker, card.brokerName, card.brokerAbbreviation, card.templateName]
+      .join(" ")
+      .toLowerCase()
+      .includes(term);
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "investor") return a.investor.localeCompare(b.investor);
+    if (sortBy === "status") return a.status.localeCompare(b.status);
+    return a.updated.localeCompare(b.updated);
+  });
+
+  return (
+    <>
+      <div className="mb-4 grid grid-cols-4 gap-3">
+        {boardColumns.map(({ key, label }) => {
+          const selected = statusFilter === key;
+          const descriptions: Record<MockTradeWorkflowStatus, string> = {
+            needs_action: "Waiting to be started",
+            in_progress: "Requirements underway",
+            blocked: "Needs attention",
+            completed: "Finished this cycle",
+          };
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setStatusFilter(selected ? "all" : key)}
+              className={`rounded-lg border p-4 text-left transition ${
+                selected ? "border-sky-400/40 bg-sky-400/10" : "border-slate-800 bg-[#101318] hover:bg-slate-900/70"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-semibold ${selected ? "text-sky-300" : "text-slate-200"}`}>{label}</span>
+                <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-300">{counts[key]}</span>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">{descriptions[key]}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">Fund</span>
+        <button
+          type="button"
+          onClick={() => setFundFilter("all")}
+          className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+            fundFilter === "all" ? "border-sky-400/40 bg-sky-400/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          All funds ({tradeWorkflowBoardItems.length})
+        </button>
+        {funds.map((fund) => (
+          <button
+            key={fund.ticker}
+            type="button"
+            onClick={() => setFundFilter(fund.ticker === fundFilter ? "all" : fund.ticker)}
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+              fundFilter === fund.ticker ? "border-sky-400/40 bg-sky-400/10 text-sky-300" : "border-slate-800 bg-[#11151b] text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {fund.name} ({fund.count})
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4 flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9 w-full rounded-md border border-slate-800 bg-[#11151b] pl-9 pr-4 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500/60"
+            placeholder="Search investor, account, ticker, broker, or template..."
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="h-9 rounded-md border border-slate-800 bg-[#11151b] px-3 text-xs text-slate-200 outline-none focus:border-sky-500/60"
+        >
+          <option value="updated">Sort: Recently updated</option>
+          <option value="investor">Sort: Investor name</option>
+          <option value="status">Sort: Status</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4">
+        {boardColumns.map(({ key, label }) => {
+          const columnCards = sorted.filter((card) => card.status === key);
+          return (
+            <ShellCard key={key} className="flex max-h-[calc(100vh-380px)] flex-col overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                <span className="text-xs font-semibold text-slate-200">{label}</span>
+                <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-300">{columnCards.length}</span>
+              </div>
+              <div className="flex-1 space-y-2 overflow-y-auto p-2">
+                {columnCards.length === 0 && (
+                  <p className="px-2 py-6 text-center text-[11px] text-slate-600">Nothing here</p>
+                )}
+                {columnCards.map((card) => (
+                  <TradeWorkflowBoardCardTile key={card.tradeWorkflowId} card={card} onOpen={() => setSelectedCard(card)} />
+                ))}
+              </div>
+            </ShellCard>
+          );
+        })}
+      </div>
+
+      {selectedCard && <TradeWorkflowBoardCardDetails card={selectedCard} onClose={() => setSelectedCard(null)} />}
+    </>
+  );
+}
 type MockTradeWorkflowStatus = "needs_action" | "in_progress" | "blocked" | "completed";
 type MockWorkflowStepStatus = "completed" | "current" | "waiting" | "blocked";
 
@@ -4291,18 +4575,26 @@ function Workflows({
   onOpenDestination: (destination: NavKey, targetId?: string) => void;
   onOpenTrade: (trade: Trade) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<WorkflowPageTab>("trades");
+  const [activeTab, setActiveTab] = useState<WorkflowPageTab>("board");
   const canManageWorkflows = rolePermissions[role].canManageWorkflows;
+
+  const subtitles: Record<WorkflowPageTab, string> = {
+    board: "See every open subscription and redemption at a glance, grouped by status — built for fund events with many investors moving at once",
+    trades: "See which trades need workflow, what is pending, and who needs to act next",
+    setup: "Configure the templates and requirements PATS applies to private asset trades",
+  };
 
   return (
     <>
-      <PageTitle
-        title="Workflows"
-        subtitle={activeTab === "trades"
-          ? "See which trades need workflow, what is pending, and who needs to act next"
-          : "Configure the templates and requirements PATS applies to private asset trades"}
-      />
+      <PageTitle title="Workflows" subtitle={subtitles[activeTab]} />
       <div className="mb-5 inline-flex rounded-lg border border-slate-800 bg-[#0d1015] p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("board")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold transition ${activeTab === "board" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-200"}`}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />Ops Board
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab("trades")}
@@ -4318,14 +4610,16 @@ function Workflows({
           Template Setup
         </button>
       </div>
-      {activeTab === "trades" ? (
+      {activeTab === "board" && <TradeWorkflowBoardView />}
+      {activeTab === "trades" && (
         <TradeWorkflowsView
           localWorkflows={localWorkflows}
           localTrades={localTrades}
           onOpenDestination={onOpenDestination}
           onOpenTrade={onOpenTrade}
         />
-      ) : (
+      )}
+      {activeTab === "setup" && (
         <>
           {!canManageWorkflows && <ReadOnlyNotice label="Workflow setup is shown for traceability, but this role cannot create templates or add requirements." />}
           <WorkflowTemplateSetup
